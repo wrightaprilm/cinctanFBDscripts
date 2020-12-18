@@ -1,0 +1,117 @@
+clear();
+setwd("/Users/peterjwagner/Documents/RevBayes_Projects/");	#CHANGE THIS TO THE FOLDER IN WHICH YOU HAVE REVBAYES SCRIPTS & DATA!!!
+### This director needs three subdirectories (folders):
+#     RevBayes_Projects/scripts (additional RevBayes routines that will be used)
+#     RevBayes_Projects/data (holds data matrices & taxonomic information)
+#     RevBayes_Projects/output (where trees & logs will be sent)
+
+source("scripts/Imperio_Default_Settings.Rev");   # some default settings, usually for strict clock analyses
+
+###############################################################################
+# This is (these are) the nexus file(s) that you are using for this analysis  #
+#     Make sure that filenames & directories are correct!!!
+###############################################################################
+filenames <- v("data/Cincta_Matrix_2_States.nex", "data/Cincta_Matrix_3_States.nex", "data/Cincta_Matrix_4_States.nex");
+
+partition_states <- v(2,3,4);
+partition_ordering <- v("unordered","unordered","unordered");
+coding_bias <- v("all","variable","variable");	## prepare for ascertainment bias in binary characters; 'all': invariant & autapomorphies present; 'variable': all vary & autapomorphies present; 'informative': all vary & no autapomorphies.
+max_age <- 7.3;						# used if clock_model=="big_bang";
+
+outgroup = clade("Ctenocystis");
+ingroup = clade("Gyrocystis_platessa","Gyrocystis_testudiformis","Gyrocystis_cruzae","Gyrocystis_badulesiensis","Gyrocystis_erecta","Progyrocystis_disjuncta","Protocinctus_mansillaensis","Elliptocinctus_barrandei","Elliptocinctus_vizcainoi","Sucocystis_theronensis","Sucocystis_bretoni","Lignanicystis_barriosensis","Undatacinctus_undata","Sucocystis_acrofera","Undatacinctus_quadricornuta","Undatacinctus_melendezi","Asturicystis_jaekeli","Sotocinctus_ubaghsi","Trochocystites_bohemicus","Trochocystoides_parvus","Ludwigicinctus_truncatus","Graciacystis_ambigua","Asturicystis_havliceki","Nelegerocystis_ivantzovi","Rozanovicystis_triangularis","Davidocinctus_pembrokensis");
+among_char_var <- "lognormal";			# enter "gamma" or "lognormal"
+clock_model <- "big_bang";		# enter "strict" for strict clock, "uncorrelated" for relaxed clock with lognormal; "autocorrelated" for autocorrelated with lognormal shifts
+unscored_taxa <- v(24,25,26,27);
+
+############################################################################
+#          Set a variable for the number of character partitions           #
+############################################################################
+n_data_subsets <- filenames.size();
+taxa <- readTaxonData(file="data/cincta_fossil_intervals_FA.tsv");
+n_taxa <- taxa.size();
+n_branches <- (2 * n_taxa) - 2;
+moves = VectorMoves();
+
+############################################################################
+# Set up appropriate parameters for speciation, extinction & sampling.     #
+#      We also set up the tree search here.                                #
+#                                                                          #
+# NOTE: This will sometimes freeze; if it does, then edit the script so    #
+#      origination & extinction are set to 1.0. This usually works!        #
+############################################################################
+source("scripts/Accio_Cincta_Range_Based_FBD_Parameterization.Rev");
+
+############################################################################
+# Set up appropriate Q-matrices for the partitions
+#   as well as the among-character and among-branch
+#   rate variation models
+#  (Again, make sure that the directory is OK)
+############################################################################
+source("scripts/Accio_Parameters_for_Analysis_Partitioned_by_States_and_Ordering_and_Class.Rev");
+
+############################################################################
+# Wrap it all into your model
+############################################################################
+mymodel = model(tau,Q);		# tau should have FBD & character evolution models attached to it
+
+############################################################################
+# Add monitors & commence MCMC'ing
+#  (Again, make sure that the source directory is OK)
+# NOTE: the program saves trees once every printgen generations; so, the
+#   lower the number, the more trees you save.
+############################################################################
+monitors = VectorMonitors();
+## alter the file names to better reflect the analysis (e.g., cincta_early_burst_relaxed_clock.log and cincta_early_burst_relaxed_clock.trees)
+monitors.append(mnModel(filename="output/cincta_relaxed_clock_early_burst.log", printgen=10));
+monitors.append(mnFile(tau, filename="output/cincta_relaxed_clock_early_burst.trees",printgen=10,separator=TAB,tau));
+monitors.append(mnScreen(printgen=100,mean_rt,init_branch_rate,acln_sigma,fbd_p,fbd_q,fbd_r,num_samp_anc,origin_time,summed_gaps));
+
+################################################################################
+# Here are some starting parameters for your MCMC analysis: but use your own!
+# NOTE: as the number of moves increases, the greater the number of generations
+#     we need to make a thorough search of parameter space.  So, as taxa and
+#     and complexity of character evolution models increases, the greater the
+#     number of generations you should use.
+################################################################################
+no_runs=3;		# Number of independent MCMC analyses. (Even MCMC can get stuck in local optima!)
+burnin_gens=10000;	# Number of generations for the burnin pre-analysis (to tune parameters).
+tuning_int=200;		    # Frequency at which burnin analysis will tune parameters (in generations).
+running_gens=500000;	# Number of generations for the real analysis; the bigger the analysis, the more you usually need.
+
+#############
+##First run power posterior after completed analysis
+##############
+
+pow_p = powerPosterior(mymodel, moves, monitors, "Stepping_Stone_Test/Early_Burst_Relaxed_Clock_Test", cats=50);  ##Set up your power posterior from everything in completed analysis. Create output for power posterior in quotes
+pow_p.burnin(generations=burnin_gens,tuningInterval=tuning_int);                                            ##Set up power posterior burn in. Should likely be logner than 10000
+pow_p.run(generations=running_gens);
+
+#######let run#################
+
+
+##############
+##Run a stepping stone simulation
+##Can be run after closing a completed analysis as long as power posterior has already been completed
+##############
+ss = steppingStoneSampler(file="Stepping_Stone_Test/Early_Burst_Relaxed_Clock_Test.out", powerColumnName="power", likelihoodColumnName="likelihood"); ##Runs simulation. File name same as in power_p
+ss.marginal();   ##Calculate and display marginal likelihood of stepping stone simulations
+
+###############
+##Path sampling
+##Should get very similar value to stepping stones
+###############
+ps = pathSampler(file="Stepping_Stone_Test//Early_Burst_Relaxed_Clock_Path_Sampler.out", powerColumnName="power", likelihoodColumnName="likelihood");
+ps.marginal();
+
+############################################################################
+# Prepare MCMC output to get consensus tree(s) and the most probable tree(s)
+#    As always, double check the directories....
+############################################################################
+tree_files <- v("output/cincta_relaxed_clock_early_burst_run_1.trees","output/cincta_relaxed_clock_early_burst_run_2.trees","output/cincta_relaxed_clock_early_burst_run_3.trees");
+maj_rule_files <- v("output/cincta_cincta_relaxed_clock_early_burst_run_1_maj_rule.tre","output/cincta_cincta_relaxed_clock_early_burst_run_2_maj_rule.tre","output/cinctacincta_relaxed_clock_early_burst__run_3_maj_rule.tre");
+most_probable_files <- v("output/cincta_cincta_relaxed_clock_early_burst_run_1_simple_map.tre","output/cincta_cincta_relaxed_clock_early_burst_run_2_simple_map.tre","output/cincta_cincta_relaxed_clock_early_burst_run_3_simple_map.tre");
+
+source("scripts/Accio_Consensus_Tree.Rev");
+
+source("scripts/Accio_Most_Probable_Tree.Rev");

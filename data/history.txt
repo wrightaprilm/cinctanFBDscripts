@@ -1,0 +1,22 @@
+data <- readDiscreteCharacterData("Cinctans_for_RevBayes.nex")
+data
+data <- readDiscreteCharacterData("Cinctans_for_RevBayes.nex")
+data.getNumStatesVector()
+data.setNumStatesVector()
+state_vec <- data.setNumStatesVector()
+state_vec
+for (i in 1:state_vec) {
+write_csv(i, ".nex")
+
+for (i in 1:state_vec) {
+writeNexus(i, i + ".nex")
+}
+for (i in state_vec) {
+writeNexus(i, i + ".nex")
+}
+for (i in state_vec) {
+writeNexus(i, "data/" + i + ".nex")
+}
+
+wh
+

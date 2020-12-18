@@ -1,0 +1,35 @@
+#NEXUS
+
+BEGIN DATA;
+	DIMENSIONS  NTAX=27 NCHAR=12;
+	FORMAT DATATYPE = STANDARD RESPECTCASE GAP = - MISSING = ? SYMBOLS = "   0 1 2";
+	MATRIX
+Ctenocystis	????????????
+Gyrocystis_platessa	000001-10000
+Gyrocystis_testudiformis	000001-10000
+Gyrocystis_cruzae	000001-?0000
+Gyrocystis_badulesiensis	000001-10000
+Gyrocystis_erecta	000001-?0000
+Progyrocystis_disjuncta	000001-00000
+Protocinctus_mansillaensis	0100011??100
+Elliptocinctus_barrandei	0100011?0110
+Elliptocinctus_vizcainoi	010001??011?
+Sucocystis_theronensis	0100011?0100
+Sucocystis_bretoni	0100111?0100
+Lignanicystis_barriosensis	0100000?0110
+Undatacinctus_undata	0100010?0110
+Sucocystis_acrofera	010001100121
+Undatacinctus_quadricornuta	0100001?0110
+Undatacinctus_melendezi	010001??0110
+Asturicystis_jaekeli	010101101222
+Sotocinctus_ubaghsi	010001101221
+Trochocystites_bohemicus	1101111?2222
+Trochocystoides_parvus	110101102222
+Ludwigicinctus_truncatus	010001-?0100
+Graciacystis_ambigua	0100010?1010
+Asturicystis_havliceki	????????????
+Nelegerocystis_ivantzovi	????????????
+Rozanovicystis_triangularis	????????????
+Davidocinctus_pembrokensis	????????????
+;
+end;

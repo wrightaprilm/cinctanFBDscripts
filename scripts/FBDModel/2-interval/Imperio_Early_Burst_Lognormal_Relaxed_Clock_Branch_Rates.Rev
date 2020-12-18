@@ -1,0 +1,46 @@
+# UNCORRELATED LOGNORMAL RATES
+# (mu = log(M) - (sigma^2 / 2))
+# *can be modified to use exponential or independent gamma rates
+# written by D. Wright 2019-06
+# n_taxa: number of taxa;
+# max_age: oldest first appearance
+#NOTE: This varies both the geometric mean and the log-variance.
+
+#get number of branches
+n_branches <- 2 * n_taxa - 2;
+
+#get magnitude of the bang
+bang_mag ~ dnExponential(1.0);	# 2^bang_mag will be the initial rate
+moves.append(mvScale(bang_mag, lambda=1, tune=true, weight=5.0));
+rel_bang:=2^bang_mag;				# relative bang now a deterministic variable
+
+# set hyperpriors
+ucln_mean ~ dnExponential(2.0);
+ucln_sigma ~ dnExponential(3.0);			#standard deviation
+ucln_var := ucln_sigma * ucln_sigma;	# variance
+
+# set deterministic parameter giving mu on branch rates
+ucln_mu := ln(ucln_mean) - (ucln_var * 0.5)
+
+# mcmc moves
+moves.append( mvScale(ucln_mean, lambda=1.0, tune=true, weight=4.0));
+moves.append( mvScale(ucln_sigma, lambda=0.5, tune=true, weight=4.0));
+
+## if we go from t=0.9 to t=0.7, then the bang goes from bb^0.9 -> bb^0.7
+## the area under the curve is (bb^0.9 - bb^0.7)/ln(bb)
+## So, ((rel_bang^0.9 - rel_bang^0.7)/ln(rel_bang))/(t=0.9-0.7) is the average rate.
+
+# assign rates to branches and add mcmc move
+for (bb in 1:n_branches)	{
+ init_branch_rates[bb] ~ dnLnorm(ucln_mu, ucln_sigma);
+ moves.append( mvScale(init_branch_rates[bb], lambda=1, tune=true, weight=2.0));
+ # this will change as rel_bang, divergence_dates[bb] & init_branch_rates[bb] change
+ branch_rates[bb] := init_branch_rates[bb]*(((rel_bang^((branch_lengths[bb]+divergence_dates[bb])/max_age))-(rel_bang^(divergence_dates[bb]/max_age)))/ln(x=rel_bang))/(branch_lengths[bb]/max_age);
+ }
+
+# mcmc moves to alter all branches in the same way;
+moves.append( mvVectorScale(init_branch_rates,lambda=1.0,tune=true,weight=2.0));
+moves.append( mvVectorSingleElementScale(init_branch_rates,lambda=30.0,tune=true,weight=1.0));
+
+# set deterministic node to monitor
+mean_rt := mean(branch_rates);
