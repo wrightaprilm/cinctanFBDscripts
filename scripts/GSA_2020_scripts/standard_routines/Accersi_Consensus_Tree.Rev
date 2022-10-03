@@ -1,0 +1,13 @@
+
+# tree_files: scalar or vector giving locations & names of tree file or tree files
+
+# maj_rule_files: scalar or vector giving locations & names to write consensus tree(s)
+
+for (i in 1:no_runs)	{
+	# Read in the tree trace and construct the consensus tree tree #
+	trace = readTreeTrace(tree_files[i], treetype="clock");
+	trace.setBurnin(0.25);
+
+	# Summarize the consensus tree to file
+	consensusTree(trace, file=maj_rule_files[i]);
+	}

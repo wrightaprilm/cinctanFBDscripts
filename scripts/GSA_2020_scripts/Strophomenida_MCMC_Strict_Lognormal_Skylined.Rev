@@ -1,0 +1,155 @@
+clear();
+if (getwd()=="/Users/peterjwagner" || getwd()=="/Users/peterwagner" || getwd()=="/home/peterjwagner")  {
+  working_directory <- getwd()+"/Documents/RevBayes_Projects";
+  setwd(working_directory);
+  }
+
+
+### This director needs three subdirectories (folders):
+#     scripts/ (additional RevBayes routines that will be used)
+#     data/ (holds data matrices & taxonomic information)
+#     output/ (where trees & logs will be sent)
+source("scripts/standard_routines/Milgram_Default_Settings.Rev");
+
+###############################################################################
+#                  Get basic information about the clade                   #
+# This is (these are) the nexus file(s) that you are using for this analysis  #
+#     Make sure that filenames & directories are correct!!!
+###############################################################################
+analysis_name <- "Strophomenida";
+timeline_precision <- 0.05;
+#taxa <- readTaxonData("data/Strophomenida_fossil_intervals.tsv");
+taxa <- readTaxonData("data/Strophomenida_fossil_intervals_w_outgroup.tsv");
+otus <- n_taxa <- taxa.size();
+n_branches <- (2 * n_taxa) - 2;
+
+max_max_age <- taxa[1].getMaxAge();
+for (i in 2:otus) if (max_max_age < taxa[i].getMaxAge())   max_max_age <- taxa[i].getMaxAge();
+if (round(max_max_age)<max_max_age) {
+  max_max_age <- 1+round(max_max_age);
+  } else {
+  max_max_age <- round(max_max_age);
+  }
+origin_time ~ dnUnif(max_max_age,max_max_age*2);  # Specify a uniform prior on the origin #
+
+filenames <- v("data/Strophomenida_Matrix_2_States_w_outgroup.nex","data/Strophomenida_Matrix_3_States_w_outgroup.nex","data/Strophomenida_Matrix_4_States_w_outgroup.nex");
+#filenames <- v("data/Strophomenida_Matrix_2_States.nex","data/Strophomenida_Matrix_3_States.nex","data/Strophomenida_Matrix_4_States.nex");
+n_data_subsets <- filenames.size();
+for (nd in 1:n_data_subsets) {
+  morpho[nd] <- readDiscreteCharacterData(filenames[nd]);
+#  print(morpho[nd])
+  partition_chars[nd] <- morpho[nd].nchar();
+  }
+partition_states <- v(2,3,4);
+partition_ordering <- v("unordered","unordered","unordered");
+coding_bias <- v("variable","variable","variable");	## prepare for ascertainment bias in binary characters; 'all': invariant & autapomorphies present; 'variable': all vary & autapomorphies present; 'informative': all vary & no autapomorphies.
+
+###############################################################################
+#                  Setup parameters for the analyses                   #
+#     Again, make sure that filenames & directories are correct!!!
+###############################################################################
+clock_model <- "strict";		# enter "strict" for strict clock, "uncorrelated" for relaxed clock with lognormal; "autocorrelated" for autocorrelated with lognormal shifts
+among_char_var <- "lognormal";	# enter "gamma" or "lognormal"continuous <- TRUE;
+punctuated <- FALSE;
+pr_pe <- 1;   # prob. of speciation event 'initiating' cladistic branch
+
+outgroup=clade("Sowerbyites");
+ingroup=clade("Strophomena","Keilamena","Tetraphalerella","Actinomena","Holtedahlina","Longvillia","Leigerina","Pseudostrophomena","Furcitella","Bekkerina","Bellimurina","Biparetis","Dactylogonia","Geniculina","Katastrophomena","Chunanomena","Luhaia","Molongcola","Murinella","Oepikina","Quondongia","Crassoseptaria","Haljalanites","Colaptomena","Kjerulfina","Rafinesquina","Megamyonia","Rhipidomena","Kjaerina","Septomena","Leptaena","Kiaeromena","Bekkeromena","Glyptomena","Paromalomena","Platymena","Resupinsculpta");
+timeline <- v(1.25,5.45,8.8,14.25,17.65,25.45,27.3,29.55,33.15,38.45,42.9);
+seed_origination <- v(0.334,0.2059,0.2616,0.6103,0.6431,0.7389,0.1055,0.7797,0.3966,0.3999,0.2567,0.2468);
+seed_sampling <- v(0.4763,0.5701,0.3794,0.6824,0.877,0.5102,0.5328,0.6018,0.5829,0.6313,0.6389,0.7845);
+seed_sampling_lb <- v(0.0956,0.1102,0.0597,0.1631,0.3483,0.2427,0.0642,0.1815,0.1155,0.1954,0.1765,0.2979);
+seed_sampling_ub <- v(0.2647,0.3252,0.1608,0.5068,0.9199,0.4737,0.1851,0.3943,0.2732,0.4245,0.3631,0.8233);
+nbins <- seed_sampling.size();
+rho <- 0.3789;
+
+############################################################################
+# Set up appropriate parameters for speciation, extinction & sampling.     #
+#      We also set up the tree search here.                                #
+#                                                                          #
+# NOTE: This will sometimes freeze; if it does, then edit the script so    #
+#      origination & extinction are set to 1.0. This usually works!        #
+############################################################################
+moves = VectorMoves();
+source("scripts/FBD_scripts/Milgram_Skyline_N_Interval.Rev");
+
+############################################################################
+# Set up appropriate Q-matrices for the partitions
+#   as well as the among-character and among-branch
+#   rate variation models
+#  (Again, make sure that the directory is OK)
+############################################################################
+if (punctuated) source("scripts/branch_rate_scripts/Accersi_Expected_Branchings.Rev");
+source("scripts/standard_routines/Accersi_Parameters_for_Analysis_Partitioned_by_States_and_Ordering_and_Class.Rev");
+if (continuous)  source("scripts/standard_routines/Accersi_Parameters_for_Continuous_Character_Data.Rev");
+
+############################################################################
+# Wrap it all into your model
+############################################################################
+#mymodel = model(tau);		# fbd_tree should have FBD & character evolution models attached to it
+mymodel = model(fbd_tree);		# fbd_tree should have FBD & character evolution models attached to it
+
+############################################################################
+# Add monitors & commence MCMC'ing
+#  (Again, make sure that the source directory is OK)
+# NOTE: the program saves trees once every printgen generations; so, the
+#   lower the number, the more trees you save.
+############################################################################
+output_file = "output/"+ analysis_name + "_" + among_char_var + "_char_variation";
+if (clock_model=="uncorrelated") {
+  output_file = output_file + "_+_uncorrelated_relaxed_clock";
+  } else if (clock_model=="autocorrelated") {
+  output_file = output_file + "_+_autocorrelated_relaxed_clock";
+  } else if (clock_model=="big_bang" || clock_model=="early_burst") {
+  output_file = output_file + "_+_early_burst_clock";
+  } else {
+  output_file = output_file + "_+_strict_clock";
+  }
+if (punctuated) {
+  output_file = output_file + "_+_punctuated_change";
+  } else  {
+  output_file = output_file + "_+_gradual_change";
+  }
+if (rate_partitions.size()>1)   output_file = output_file + "_" + "_char_rate_partitions_";
+if (nbins>1)	output_file = output_file + "_" + nbins + "_bin_skyline";
+filename1 = output_file + ".log";
+filename2 = output_file + "_MCMC.trees";
+
+monitors = VectorMonitors();
+## alter the file names to better reflect the analysis (e.g., nimravinae_strict_clock.log and nimravinae_strict_clock.trees)
+monitors.append(mnModel(filename=filename1, printgen=10));
+monitors.append(mnFile(fbd_tree, filename=filename2,printgen=10,separator=TAB,fbd_tree));
+if (among_char_var=="uniform") {
+ monitors.append(mnScreen(printgen=500,mean_rt,origin_time));
+ } else {
+ monitors.append(mnScreen(printgen=500,mean_rt,origin_time));
+ }
+
+#### MCMC Settings
+no_runs=1;		# Number of independent MCMC analyses. (Even MCMC can get stuck in local optima!)
+burnin_gens=10000;	# Number of generations for the burnin pre-analysis (to tune parameters).
+tuning_int=200;		# Frequency at which burnin analysis will tune parameters (in generations).
+running_gens=1000000;	# Number of generations for the real analysis; the bigger the analysis, the more you usually need.
+
+print("Conducting "+ output_file + " analysis.");
+# Now, go read Anna Karenina.....
+source("scripts/standard_routines/AbracaMCMC_with_Partitioned_Characters.Rev");
+
+#############
+## Get consensus
+##############
+
+for (i in 1:no_runs)  {
+ tree_files[i] <- output_file + "_MCMC_run_" +i +".trees";
+ maj_rule_files[i] <- output_file + "_run_" +i + "_maj_rule.tre";
+ most_probable_files[i] <- output_file + "_run_" +i + "_simple_map.tre";
+ }
+
+source("scripts/Accersi_Consensus_Tree.Rev");
+
+source("scripts/Accersi_Most_Probable_Tree.Rev");
+
+
+for (i in 1:100)  test[i]~dnUniform(0.001, 0.999)
+
+for (i in 1:1000)  test[i]~dnNormal(0,1)

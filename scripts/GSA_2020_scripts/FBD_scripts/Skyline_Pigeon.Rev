@@ -1,0 +1,31 @@
+# requires: timeline. This separate n+1 intervals by the given dates.
+if (timeline[1]==0)  time_line <- v(max_max_age);
+nbins <- timeline.size();
+
+for (i in 1:(nbins+1)) {
+# print(i);
+ speciation_rate[i] ~ dnExponential(init_orig_rate[i]);
+ # Specify a scale move on the speciation_rate parameter #
+ moves.append(mvScale(speciation_rate[i], lambda=0.01, weight=5));
+ moves.append(mvScale(speciation_rate[i], lambda=0.10, weight=3));
+ moves.append(mvScale(speciation_rate[i], lambda=1.00, weight=1));
+
+ if (nbins>1) {
+  turnover[i] ~ dnLognormal(turnover_geomean_bin, turnover_lnvar_bin);
+  } else {
+  turnover[i] ~ dnLognormal(turnover_geomean, turnover_lnvar);
+  }
+ # Specify a scale move on the turnover parameter #
+ moves.append(mvSlide(turnover[i], delta=0.01, weight=5));
+ moves.append(mvSlide(turnover[i], delta=0.10, weight=3));
+ moves.append(mvSlide(turnover[i], delta=1.00, weight=1));
+
+ # Assume an exponential prior on the rate of sampling fossils (psi) #
+ psi[i] ~ dnExponential(sampling[i]);
+ # Specify a scale move on the psi parameter #
+ moves.append(mvScale(psi[i], lambda=0.01, weight=5));
+ moves.append(mvScale(psi[i], lambda=0.10, weight=3));
+ moves.append(mvScale(psi[i], lambda=1.00, weight=1));
+ } # end skyline loops
+
+ extinction_rate := turnover*speciation_rate;

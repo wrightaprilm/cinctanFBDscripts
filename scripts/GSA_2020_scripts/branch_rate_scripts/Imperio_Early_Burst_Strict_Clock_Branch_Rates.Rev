@@ -1,0 +1,29 @@
+# n_taxa: number of taxa;
+# max_age: oldest first appearance
+
+#get number of branches
+n_branches <- 2 * n_taxa - 2;
+
+#function RealPos Convert_to_RealPos ( Real x ) {
+#	x * 1;
+#	}
+
+# get magnitude of the bang
+bang_mag ~ dnExponential(1.0);	# 2^bang_mag will be the initial rate
+moves.append(mvScale(bang_mag, lambda=1, tune=true, weight=5.0));
+rel_bang:=2^bang_mag;				# relative bang now a deterministic variable
+
+init_branch_rate ~ dnExponential(1.0);
+moves.append(mvScale(init_branch_rate, lambda=0.01, tune=true, weight=4));
+moves.append(mvScale(init_branch_rate, lambda=0.10, tune=true, weight=4));
+moves.append(mvScale(init_branch_rate, lambda=1.00, tune=true, weight=4));
+
+# assign rates to branches and add mcmc move
+for (bb in 1:n_branches)	{
+	# this will change as rel_bang, divergence_dates[bb] & init_branch_rate[bb] change
+	branch_rates[bb] := abs(init_branch_rate*(((rel_bang^((branch_lengths[bb]+divergence_dates[bb])/max_age))-(rel_bang^(divergence_dates[bb]/max_age)))/ln(x=rel_bang))/(branch_lengths[bb]/max_age));
+#	branch_rates[bb] := Convert_to_RealPos(init_branch_rate*(((rel_bang^((branch_lengths[bb]+divergence_dates[bb])/max_age))-(rel_bang^(divergence_dates[bb]/max_age)))/ln(x=rel_bang))/(branch_lengths[bb]/max_age));
+	}
+
+# set deterministic node to monitor
+mean_rt := mean(branch_rates);

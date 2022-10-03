@@ -1,0 +1,102 @@
+########################################################################
+# Set up appropriate parameters for speciation, extinction & sampling #
+#  "Seed" numbers based on analyses of Paleobiology Database data.  #
+########################################################################
+# clock
+#timeline <- v(509, 500.5) - 500 # Wstart=509, W/D = 504.5, D/G=500.5
+#timeline <- v(9, 7, .5)
+
+# midpoint of Dr stage = 502.5, last FAD is ~498.2, so rescaled Dr midpoint is 4.3
+timeline <- v(4.3)
+
+for(i in 1:(timeline.size()+1)){
+ speciation_rate[i] ~ dnExponential(1.471);
+ moves.append(mvScale(speciation_rate[i], lambda=0.01, weight=5));
+ moves.append(mvScale(speciation_rate[i], lambda=0.10, weight=3));
+ moves.append(mvScale(speciation_rate[i], lambda=1.00, weight=1));
+
+ turnover[i] ~ dnLnorm(ln(0.945), 0.6564);          # dnUnif(0.9, 1.05);
+ moves.append(mvSlide(turnover[i], delta=0.01, weight=5));
+ moves.append(mvSlide(turnover[i], delta=0.10, weight=3));
+ moves.append(mvSlide(turnover[i], delta=1.00, weight=1));
+
+ extinction_rate[i] := turnover[i]*speciation_rate[i]
+ diversification[i] := speciation_rate[i] - extinction_rate[i]
+
+ psi[i] ~ dnExponential(3.892);
+ moves.append( mvScale(psi[i], lambda = 0.01) )
+ moves.append( mvScale(psi[i], lambda = 0.1) )
+ moves.append( mvScale(psi[i], lambda = 1) )
+}
+
+# Proportional Taxon Sampling of Youngest Time Slice
+rho <- 0 # 0.506 # 0.0; # 'extant' sampling.
+#rho <- psi[1];
+#rho <- 0.506*rho/rho;
+rho <- Probability(0.506);
+
+# Establish Basal Divergence Time
+origin_time ~ dnUnif(8.5, 12.11); # previously used 7.3 but oldest FA bound in file Pete sent is is 8.4
+moves.append(mvSlide(origin_time, delta=0.01, weight=5));
+moves.append(mvSlide(origin_time, delta=0.10, weight=3));
+moves.append(mvSlide(origin_time, delta=1.00, weight=1));
+
+fbd_dist = dnBirthDeathSamplingTreatment(originAge=origin_time,lambda=speciation_rate,mu=extinction_rate,phi=psi, R=rho,timeline=timeline,condition="sampling",taxa=taxa);
+
+############################################################################
+#                Set up tree                #
+############################################################################
+# create the vector of clade constraints
+outgroup = clade("Ctenocystis");
+ingroup = clade("Gyrocystis_platessa","Gyrocystis_testudiformis","Gyrocystis_cruzae","Gyrocystis_badulesiensis","Gyrocystis_erecta","Progyrocystis_disjuncta","Protocinctus_mansillaensis","Elliptocinctus_barrandei","Elliptocinctus_vizcainoi","Sucocystis_theronensis","Sucocystis_bretoni","Lignanicystis_barriosensis","Undatacinctus_undata","Sucocystis_acrofera","Undatacinctus_quadricornuta","Undatacinctus_melendezi","Asturicystis_jaekeli","Sotocinctus_ubaghsi","Trochocystites_bohemicus","Trochocystoides_parvus","Ludwigicinctus_truncatus","Graciacystis_ambigua","Asturicystis_havliceki","Nelegerocystis_ivantzovi","Rozanovicystis_triangularis","Davidocinctus_pembrokensis");
+unscored_taxa <- v(24,25,26,27);
+constraints = v(ingroup);
+#fbd_tree ~ dnConstrainedTopology(fbd_dist,constraints=constraints);
+
+tau ~ dnConstrainedTopology(fbd_dist,constraints=constraints);
+
+moves.append(mvFNPR(tau , weight=n_branches/2));               # time-tree pruning & grafting
+moves.append(mvNNI(tau , weight=n_branches/2));                # nearest-neighbor interchanges
+moves.append(mvCollapseExpandFossilBranch(tau ,origin_time,weight=n_taxa/4)); # consider ancestor-descendant rather than sister species
+moves.append(mvNodeTimeSlideUniform(tau , weight=n_branches/2));       # adjust divergence times
+moves.append(mvRootTimeSlideUniform(tau , origin_time, weight=5));      # adjust basal divergence time.
+
+num_samp_anc := tau.numSampledAncestors();
+for (bn in 1:n_branches){
+ divergence_dates[bn]:=tau.nodeAge(bn)          # this is when a hypothesized ancestor diverges or an OTU is first seen;
+ branch_lengths[bn]:=tau.branchLength(bn);        # this is branch *duration* not expected change!
+ origin_dates[bn]:=tau.branchLength(bn)+tau.nodeAge(bn); # this is when a lineage diverged from its ancestor
+}
+
+summed_gaps := sum(branch_lengths);
+
+
+#intervals = readDataDelimitedFile(file="data/cincta_fossil_intervals.tsv", header=true)
+# Setup the fossil tip sampling #
+# Use a for loop to create a uniform distribution on the occurence time for each fossil #
+# The boundaries of the uniform distribution are specified in the tsv file #
+
+fossils = tau.getFossils()
+
+for(i in 1:fossils.size()){
+   t[i] := tmrca(tau, clade(fossils[i]))
+
+  a_i = fossils[i].getMinAge()
+  b_i = fossils[i].getMaxAge()
+
+  F[i] ~ dnUniform(t[i] - b_i, t[i] - a_i)
+  F[i].clamp( 0 )
+}
+
+# Add a move to sample the fossil times #
+moves.append(mvFossilTimeSlideUniform(tau, origin_time, weight=5.0))
+
+
+clade_extant = clade("Sucocystis_acrofera");
+#age_extant := tmrca(fbd_tree, clade_extant); # There is no particularly good reason to keep this!
+
+pruned_fbd_tree := fnPruneTree(tau, prune=v("Asturicystis_havliceki","Nelegerocystis_ivantzovi","Rozanovicystis_triangularis","Davidocinctus_pembrokensis"))
+#### for easy printing on screen ####
+fbd_p := speciation_rate;
+fbd_q := extinction_rate;
+fbd_r := psi;

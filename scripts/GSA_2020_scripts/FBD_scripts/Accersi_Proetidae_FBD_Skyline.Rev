@@ -1,0 +1,78 @@
+########################################################################
+# Set up appropriate parameters for speciation, extinction & sampling #
+# "Seed" numbers based on analyses of Paleobiology Database data. #
+########################################################################
+timeline <- v(12.2,36,46.6,72.5,80.7,97.1,111.7,123.3); # Early Ordovician/Middle Ordovician/Late Ordovician/Early Silurian/Late Silurian/Early Devonian/Middle Devonian/Late Devonian/Early Carboniferous
+sampling <- v(0.3222,2.000,0.7014,1.1275,0.3818,0.705,0.3926,1.7625,0.4135);
+# Initial Diversification Rates based on Meso-Cenozoic Bivalvia
+bins <- sampling.size();
+for (i in 1:bins) {
+# print(i);
+ cladogenesis_rate[i] ~ dnExponential(0.573);
+ fbd_p[i]:=cladogenesis_rate[i];
+ moves.append(mvScale(cladogenesis_rate[i], lambda=0.01, weight=5));
+ moves.append(mvScale(cladogenesis_rate[i], lambda=0.10, weight=3));
+ moves.append(mvScale(cladogenesis_rate[i], lambda=1.00, weight=1));
+
+ turnover[i] ~ dnLognormal(0.945, 1.926745);
+
+ moves.append(mvSlide(turnover[i], delta=0.01, weight=5));
+ moves.append(mvSlide(turnover[i], delta=0.10, weight=3));
+ moves.append(mvSlide(turnover[i], delta=1.00, weight=1));
+ fbd_q[i]:=extinction_rate[i]:= turnover[i]*cladogenesis_rate[i];
+ diversification[i] := cladogenesis_rate[i] - extinction_rate[i];
+
+# Fossil Sampling Rates based on rocks and sites averaged occupied by Meso-Cenozoic Bivalvia
+ psi[i] ~ dnExponential(sampling[i]);
+ moves.append(mvScale(psi[i], lambda=0.01, weight=5));
+ moves.append(mvScale(psi[i], lambda=0.10, weight=3));
+ moves.append(mvScale(psi[i], lambda=1.00, weight=1));
+ completeness[i] := psi[i]/(extinction_rate[i]+psi[i]);
+ fbd_r[i]:=psi[i];
+ } # end skyline loops
+
+# Proportional Taxon Sampling of Youngest Time Slice
+rho <- Probability(0.2); # 'extant' sampling.
+
+# Establish Basal Divergence Time
+max_div <- 150;
+origin_time ~ dnUnif(136, max_div);
+moves.append(mvSlide(origin_time, delta=0.01, weight=5));
+moves.append(mvSlide(origin_time, delta=0.10, weight=3));
+moves.append(mvSlide(origin_time, delta=1.00, weight=1));
+
+############################################################################
+#                               Set up tree                                #
+############################################################################
+#fbd_dist = dnFBDRP(origin=origin_time, lambda=cladogenesis_rate, mu=extinction_rate, psi=psi, rho=rho, timeline=timeline, taxa=taxa, condition="sampling");
+#psiTimeline <- timeline;
+#psiTimeline[bins] <- max_div;
+#fbd_dist = dnFossilizedBirthDeathProcess(originAge=origin_time,lambda=cladogenesis_rate, mu=extinction_rate, psi=psi, rho=rho, taxa=taxa, condition="sampling",lambdaTimeline=timeline,muTimeline=timeline,psiTimeline=timeline);
+fbd_dist = dnBirthDeathSamplingTreatment(originAge=origin_time,lambda=cladogenesis_rate, mu=extinction_rate, phi=psi, R=rho, timeline=timeline, condition="sampling", taxa=taxa);
+fbd_dist = dnFossilizedBirthDeathProcess(originAge=origin_time,lambda=cladogenesis_rate, mu=extinction_rate, psi=psi, rho=rho, taxa=taxa, condition="sampling",timeline=timeline);
+# create the vector of clade constraints
+constraints = v(ingroup);
+fbd_tree ~ dnConstrainedTopology(fbd_dist,constraints=constraints);
+
+moves.append(mvFNPR(fbd_tree, weight=n_branches/2));                              # time-tree pruning & grafting
+moves.append(mvNNI(fbd_tree, weight=n_branches/2));                               # nearest-neighbor interchanges
+moves.append(mvCollapseExpandFossilBranch(fbd_tree,origin_time,weight=n_taxa/4)); # consider ancestor-descendant rather than sister species
+moves.append(mvNodeTimeSlideUniform(fbd_tree, weight=n_branches/2));              # adjust divergence times
+moves.append(mvRootTimeSlideUniform(fbd_tree, origin_time, weight=5));            # adjust basal divergence time.
+
+num_samp_anc := fbd_tree.numSampledAncestors();
+for (bn in 1:n_branches)   {
+   divergence_dates[bn]:=fbd_tree.nodeAge(bn)                   # this is when a hypothesized ancestor diverges or an OTU is first seen;
+   branch_lengths[bn]:=fbd_tree.branchLength(bn);               # this is branch *duration* not expected change!
+   origin_dates[bn]:=fbd_tree.branchLength(bn)+fbd_tree.nodeAge(bn); # this is when a lineage diverged from its ancestor
+   }
+
+#### Set up deterministic variables for output purposes only  ####
+fbd_p:=cladogenesis_rate;      # origination rate for output
+fbd_q:=cladogenesis_rate;      # extinction rate for output
+fbd_r:=psi;      # sampling rate for output
+completeness := psi/(extinction_rate+psi);
+diversification := cladogenesis_rate - extinction_rate;
+summed_gaps := sum(branch_lengths);
+
+clade_extant = clade("Phillipsia_belgica");

@@ -1,0 +1,65 @@
+# modified from April's script
+for (bn in 1:nbins)  {
+  speciation_rate[bn] ~ dnExponential(abs(1/seed_origination[bn]));
+  moves.append(mvScale(speciation_rate[bn], lambda=0.01, weight=5));
+  moves.append(mvScale(speciation_rate[bn], lambda=0.10, weight=3));
+  moves.append(mvScale(speciation_rate[bn], lambda=1.00, weight=1));
+
+  extinction_volatility[bn] ~ dnNormal(0,1);
+  moves.append(mvSlide(extinction_volatility[bn], delta=0.01, weight=5));
+  moves.append(mvSlide(extinction_volatility[bn], delta=0.10, weight=3));
+  moves.append(mvSlide(extinction_volatility[bn], delta=1.00, weight=1));
+  if (nbins==1)  {
+    extinction_rate[bn]:=abs(speciation_rate[bn]*turnover_geomean*(turnover_lnstdv^extinction_volatility[bn]));
+#    turnover[bn] := abs(turnover_geomean*(turnover_lnstdv^extinction_volatility[bn]));
+#    turnover[bn] ~ dnLognormal(turnover_geomean, turnover_lnvar );
+    } else  {
+    extinction_rate[bn] := abs(speciation_rate[bn]*turnover_geomean_bin*(turnover_lnstdv_bin^extinction_volatility[bn]));
+#    turnover[bn] ~ dnLognormal(turnover_geomean_bin, turnover_lnvar_bin);
+#    turnover[bn] := abs(turnover_geomean_bin*(turnover_lnstdv_bin^extinction_volatility[bn]));
+    }
+
+  # have sampling slide between upper & lower bounds rather than be purely exponential
+  psi[bn] ~ dnUnif(abs(1/seed_sampling_ub[bn]),abs(1/seed_sampling_lb[bn]));
+  moves.append(mvSlide(psi[bn], delta=0.01, weight=5));
+  moves.append(mvSlide(psi[bn], delta=0.10, weight=3));
+  moves.append(mvSlide(psi[bn], delta=1.00, weight=1));
+
+#  extinction_rate]bn]:= turnover[bn] * speciation_rate[bn];
+#  diversification[bn] := speciation_rate[bn] - extinction_rate[bn];
+  }
+
+# Establish Basal Divergence Time
+moves.append(mvSlide(origin_time, delta=0.01, weight=5));
+moves.append(mvSlide(origin_time, delta=0.10, weight=3));
+moves.append(mvSlide(origin_time, delta=1.00, weight=1));
+
+if (use_constraint_tree || ingroup.size()>1)  {
+  fbd_dist = dnBirthDeathSamplingTreatment(originAge=origin_time, lambda=speciation_rate, mu=extinction_rate, psi=psi, rho=rho, timeline=timeline, taxa=taxa);
+  if (ingroup.size()>1) {
+    constraints <- v(ingroup);
+#    fbd_tree ~ dnConstrainedTopology(fbd_dist, constraints=v(ingroup));
+    fbd_tree ~ dnConstrainedTopology(fbd_dist);
+    }
+  } else {
+  fbd_tree ~ dnBirthDeathSamplingTreatment(originAge=origin_time, lambda=speciation_rate, mu=extinction_rate, psi=psi, rho=rho, timeline=timeline, taxa=taxa);
+  }
+#fbd_dist = dnBDSTP(originAge=origin_time, lambda=fbd_p, mu=fbd_q, psi=fbd_r, rho=rho, timeline=timeline, taxa=taxa);
+moves.append(mvFNPR(fbd_tree, weight=n_branches/2));                              # time-tree pruning & grafting
+moves.append(mvNNI(fbd_tree, weight=n_branches/2));                               # nearest-neighbor interchanges
+moves.append(mvCollapseExpandFossilBranch(fbd_tree,origin_time,weight=n_taxa/4)); # consider ancestor-descendant rather than sister species
+moves.append(mvNodeTimeSlideUniform(fbd_tree, weight=n_branches/2));              # adjust divergence times
+moves.append(mvRootTimeSlideUniform(fbd_tree, origin_time, weight=5));            # adjust basal divergence time.
+
+# allow for uncertainty in first appearance time
+fossils = fbd_tree.getFossils()
+for(i in 1:fossils.size()) {
+  t[i] := tmrca(fbd_tree, clade(fossils[i]));
+
+  a_i = fossils[i].getMinAge();
+  b_i = fossils[i].getMaxAge();
+  F[i] ~ dnUniform(t[i] - b_i, t[i] - a_i);
+  F[i].clamp( 0 )
+  }
+moves.append( mvFossilTimeSlideUniform(fbd_tree, origin_time, weight=5.0) )
+num_samp_anc := fbd_tree.numSampledAncestors();

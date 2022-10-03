@@ -1,0 +1,75 @@
+clear();
+# read stratigraphic ranges
+taxa = readTaxonData(file = "data/dinosaur_ranges.tsv")
+
+# read fossil counts
+k <- readDataDelimitedFile(file = "data/dinosaur_fossil_counts.tsv", header = true, rownames = true)
+
+# interval boundaries
+timeline <- v(100, 145, 201) - 66;
+
+# Create some vector for the moves and monitors of this analysis
+moves    = VectorMoves()
+monitors = VectorMonitors()
+
+alpha <- 10
+
+# specify FBDR model parameters
+for(i in 1:(timeline.size()+1))  {
+
+#  fbd_q[i] ~ dnExp(alpha)
+  fbd_p[i] ~ dnExp(alpha)
+  fbd_r[i] ~ dnExp(alpha)
+  turnover[i] ~ dnUnif(0.9, 1.05);
+
+#  div[i] := fbd_p[i] - fbd_q[i];
+  #turnover[i] := fbd_q[i]/fbd_p[i];
+  moves.append(mvSlide(turnover[i], delta=0.01));
+  moves.append(mvSlide(turnover[i], delta=0.10));
+  moves.append(mvSlide(turnover[i], delta=1.00));
+
+#  moves.append( mvScale(fbd_q[i], lambda = 0.01) )
+#  moves.append( mvScale(fbd_q[i], lambda = 0.1) )
+#  moves.append( mvScale(fbd_q[i], lambda = 1) )
+
+  moves.append( mvScale(fbd_p[i], lambda = 0.01) );
+  moves.append( mvScale(fbd_p[i], lambda = 0.1) );
+  moves.append( mvScale(fbd_p[i], lambda = 1) );
+
+  moves.append( mvScale(fbd_r[i], lambda = 0.01) );
+  moves.append( mvScale(fbd_r[i], lambda = 0.1) );
+  moves.append( mvScale(fbd_r[i], lambda = 1) );
+}
+fbd_q:=turnover*fbd_p;
+rho <- 0.2;
+
+# model 1
+bd ~ dnFBDRMatrix(taxa=taxa, lambda=fbd_p, mu=fbd_q, psi=fbd_r, rho=rho, timeline=timeline, k=k);
+
+moves.append( mvMatrixElementScale(bd, lambda = 0.01, weight=taxa.size()) )
+moves.append( mvMatrixElementScale(bd, lambda = 0.1, weight=taxa.size()) )
+moves.append( mvMatrixElementScale(bd, lambda = 1, weight=taxa.size()) )
+
+moves.append( mvMatrixElementSlide(bd, delta = 0.01, weight=taxa.size()) )
+moves.append( mvMatrixElementSlide(bd, delta = 0.1, weight=taxa.size()) )
+moves.append( mvMatrixElementSlide(bd, delta = 1, weight=taxa.size()) )
+
+mymodel = model(bd)
+
+# add monitors
+monitors.append( mnScreen(fbd_p, fbd_q, fbd_r, printgen=100) )
+monitors.append( mnModel(filename="output/model1.log",printgen=10) )
+
+# monitors to print RevGagets input
+monitors.append( mnFile(filename="output/model1_speciation_rates.log",fbd_p,printgen=10) )
+monitors.append( mnFile(filename="output/model1_speciation_times.log",timeline,printgen=10) )
+monitors.append( mnFile(filename="output/model1_extinction_rates.log",fbd_q,printgen=10) )
+monitors.append( mnFile(filename="output/model1_extinction_times.log",timeline,printgen=10) )
+monitors.append( mnFile(filename="output/model1_sampling_rates.log",fbd_r,printgen=10) )
+monitors.append( mnFile(filename="output/model1_sampling_times.log",timeline,printgen=10) )
+
+# run the analysis
+mymcmc = mcmc(mymodel, moves, monitors, moveschedule="random")
+mymcmc.run(30000)
+
+q()

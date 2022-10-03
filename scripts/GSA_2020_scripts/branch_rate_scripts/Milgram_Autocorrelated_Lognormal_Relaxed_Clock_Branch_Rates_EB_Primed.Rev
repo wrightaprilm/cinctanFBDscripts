@@ -1,0 +1,46 @@
+# AUTOCORRELATED LOGNORMAL RATES
+# (mu = log(M) - (sigma^2 / 2))
+# *can be modified to use exponential or independent gamma rates
+# written by P. Wagner 2019-06
+# n_taxa: number of taxa;
+#NOTE: This varies only the log-variance.
+
+#get number of branches
+n_branches <- 2 * n_taxa - 2;
+
+# set initial branch rate
+branch_rates <- c(0.223179,0.0731869,0.0829986,0.0737553,0.171969,0.17057,0.0816507,0.173176,0.147062,0.220464,0.0961327,0.114748,0.176405,0.156746,0.144785,0.0864492,0.122569,0.169835,0.0697247,0.0627814,0.114748,0.164859,0.173047,0.159504,0.0960015,0.110742,0.0917772,0.103739,0.196544,0.174183,0.131166,0.179881,0.108463,0.22511,0.086107,0.215915,0.12298,0.101212,0.0942009,0.118784,0.191771,0.177556,0.127677,0.21588,0.0955215,0.17768,0.0792283,0.174313,0.146361,0.184453,0.14724,0.227863);
+init_branch_rate ~ dnExponential(0.227863);
+moves.append( mvScale(init_branch_rate, lambda=0.01, tune=true, weight=5));
+moves.append( mvScale(init_branch_rate, lambda=0.10, tune=true, weight=3));
+moves.append( mvScale(init_branch_rate, lambda=1.00, tune=true, weight=1));
+
+# set hyperpriors for "evolution" of rate parameter on tree
+acln_sigma ~ dnExponential(5.0); 		# log standard deviation;
+# mcmc moves
+moves.append( mvScale(acln_sigma, lambda=0.01, tune=true, weight=5));
+moves.append( mvScale(acln_sigma, lambda=0.10, tune=true, weight=3));
+moves.append( mvScale(acln_sigma, lambda=1.00, tune=true, weight=1));
+
+for (bb in 1:(1+n_branches))	{
+	if (bb>n_branches)	{
+		rate_shifts[bb] := 1;
+		} else	{
+#		ancestors[bb]:=tau.parent(bb);
+		rate_shifts[bb] ~ dnLnorm(mean=0, sd=acln_sigma);
+		moves.append( mvScale(rate_shifts[bb], lambda=1, tune=true, weight=2.0));
+		}
+	}
+
+for (bb in (1+n_branches):1)	{
+	if (bb>n_branches)	{
+		b_r[bb] := init_branch_rate;
+		} else	{
+		branch_rates[bb] := b_r[bb] := exp(ln(b_r[tau.parent(bb)])*ln(rate_shifts[bb]));
+#		b_r[bb];
+#		branch_rates[bb] := exp(ln(b_r[tau.parent(bb)])*ln(rate_shifts[bb]));
+		}
+	}
+
+# set deterministic node to monitor
+mean_rt := mean(branch_rates);

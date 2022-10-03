@@ -1,0 +1,43 @@
+# n_taxa: number of taxa;
+# epsilon: per-speciation rate of change
+# branch_lengths: duration of branches
+# divergence_dates: upper bounds on unsampled lines leading to taxa or nodes
+# origin_dates: divergence of lineages from the rest of the clade
+
+#get number of branches
+#n_branches <- (2 * n_taxa) - 2;
+
+# assign rates to branches as deterministic variables
+for (bn in 1:n_branches)  {
+  # you need the bin in which branch starts & ends.
+  mean_lambda = 0;
+	bn1 <- 1;
+  while (timeline[bn1]<=divergence_dates[bn]) ++bn1;
+  bn2 <- 1;
+  while (timeline[bn1]<=origin_dates[bn]) ++bn2;
+  if (bn1==bn2)   {
+    branch_rates[bb]:=(fbd_p[bn1]*epsilon);
+    } else if (abs(bn1-bn2)>1)  {
+    (bin_duration[(bn1+1):(bn2-1)])*fbd_p[(bn1+1):(bn2-1)]
+    }
+  }
+  for (bn in bn2:bn1)  {
+    # get average lambda weighted by branch lengths!!!
+    if (bn1==bn2)  {
+      # case where divergence & appearance are in same bin
+      mean_lambda=lambda[bn]
+      } else if (bn==bn1)  {
+      # rate for oldest bin
+      } else if (bn==bn2) {
+      # rate for youngest bin
+      } else if (bn2>)  {
+      # do something lambda[bn]
+			mean_lambda <- mean_lambda+lambda[bn]*bin_duration[bn]/branch_lengths[bn];
+      }
+    }
+  # this will change as rel_bang, divergence_dates[bb] & init_branch_rate[bb] change
+  branch_rates[bb] := abs(init_branch_rate*(((rel_bang^(origin_dates[bb]/max_age)-rel_bang^(divergence_dates[bb]/max_age))/ln(rel_bang))/(branch_lengths[bb]/max_age)));
+  }
+
+# set deterministic node to monitor
+mean_rt := mean(branch_rates);

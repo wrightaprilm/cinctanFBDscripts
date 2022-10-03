@@ -1,0 +1,40 @@
+# setup Rosetta Stone between rates at fine timeslices & overall bins
+# get precision of time scale
+nbins2 <- ceil((max_max_age*2)/timeline_precision);
+timeline2 <- timeline_precision*(1:nbins2);
+bin_durations <- rep(timeline_precision,nbins2);
+j <- 1;
+for (i in 1:nbins2)  {
+  speciation_rate2[i]:=speciation_rate[j];
+  if (j<nbins && (i*timeline_precision)==timeline[j]) j <- j+1;
+  }
+
+for (bn in 1:n_branches) {
+  branch_lengths[bn]:=fbd_tree.branchLength(bn);               # this is branch *duration* not expected change!
+
+  # upper bound of branch linking species or clade to rest of the tree
+  branch_end[bn]:=fbd_tree.nodeAge(bn)
+  # get the bin ("stage", etc.) in which lineage diverges/gives rise to OTU
+  termination_bin[bn]:=round(0.5+(fbd_tree.nodeAge(bn)/timeline_precision));
+  # get the time between ghost lineage/taxon & end of bin/stage/etc.
+  termination_offset[bn]:=abs((timeline2[termination_bin[bn]]-bin_durations[termination_bin[bn]])-branch_end[bn]);
+
+  branch_start[bn]:=fbd_tree.branchLength(bn)+fbd_tree.nodeAge(bn); # this is when a lineage diverged from its ancestor
+  # get the bin ("stage", etc.) in which lineage diverged from rest of clade
+  initiation_bin[bn]:=ceil(branch_start[bn]/timeline_precision);
+  # get the time between onset of origin bin & divergence of lineage from rest of tree
+  initiation_offset[bn]:=timeline2[initiation_bin[bn]]-branch_start[bn];
+
+  # "synoptic" range of ghost taxon/lineage within tree
+  bin_span[bn]:=initiation_bin[bn]:termination_bin[bn];
+  ttl_bins[bn]:=abs(bin_span[bn].size());
+  a[bn]:=rep(0,termination_bin[bn]-1);
+  rn[bn]:=rep(1,ttl_bins[bn]);
+  z[bn]:=rep(0,(nbins2-initiation_bin[bn]));
+  ghost_taxon[bn]:=append(append(a[bn],rn[bn]),z[bn]);
+  # This would have λt IF we could get RevBayes to read vector[i:j]
+  exp_branchings[bn]:= (branch_lengths[bn] + sum(ghost_taxon[bn]*(speciation_rate2*bin_durations))-(initiation_offset[bn]*speciation_rate2[initiation_bin[bn]]+termination_offset[bn]*speciation_rate2[termination_bin[bn]]))/branch_lengths[bn];
+#  exp_branchings[bn]:=(branch_lengths[bn]+(sum(ghost_taxon[bn]*(speciation_rate2*bin_durations))-(((initiation_offset[bn]*speciation_rate[initiation_bin[bn]])+(termination_offset[bn]*speciation_rate[termination_bin[bn]])))))/branch_lengths[bn];
+
+  # next task: put in conditional values for pr_pe if we have both phyletic gradualism & punk eq
+  }

@@ -1,0 +1,24 @@
+# Default settings 2021-09-30
+moves = VectorMoves();
+monitors = VectorMonitors();
+among_char_var <- "invariant";					# enter "invariant", "lognormal" or "gamma";
+clock_model <- "strict";						    # enter "clock", "lognormal" or "dirichlet";
+ttl_rate_partitions <- 1;							  # no rate rate partitions among characters
+rate_partition_labels <- v("none");			# names of each rate partition (none here)
+rate_partitions <- v("none");						# rate partition into which each matrix goes
+ttl_trend_partitions <- 1;							# no rate rate partitions among characters
+trend_partition_labels <- v("none");		# we are not partitioning characters for different general rates
+driven_trend_partitions <- v("none");		# we are not partitioning characters for trends tests
+nbins <- 1;		                          # We are using constant rates through time
+timeline <- v(0);                       # in cases where we need to add timelines on the fly
+turnover_geomean <- 0.9;
+turnover_lnvar <- 1.1025;
+turnover_lnstdv <- 1.05;
+turnover_geomean_bin <- 0.945;
+turnover_lnvar_bin <- 1.93;
+turnover_lnstdv_bin <- 1.389;
+use_constraint_tree <- FALSE;
+punctuated <- FALSE;
+constraints_file <- "";
+ingroup <- v("");
+continuous <- FALSE;

@@ -1,0 +1,20 @@
+
+base_branch_rate ~ dnExponential(1.0);
+moves.append(mvScale(base_branch_rate, lambda=0.01, tune=true, weight=5));
+moves.append(mvScale(base_branch_rate, lambda=0.10, tune=true, weight=3));
+moves.append(mvScale(base_branch_rate, lambda=1.00, tune=true, weight=1));
+
+boom_mag ~ dnExponential(1.0);	# 2^bang_mag will be the initial rate
+moves.append(mvScale(boom_mag, lambda=0.01, tune=true, weight=5.0));
+moves.append(mvScale(boom_mag, lambda=0.10, tune=true, weight=3.0));
+moves.append(mvScale(boom_mag, lambda=1.00, tune=true, weight=1.0));
+rel_boom:=2^boom_mag;				# relative bang now a deterministic variable
+
+event1 <- v(66,61.6);
+for (bb in 1:n_branches)	{
+	# prop. of time during boom
+	r1[bb]:= max(v(0,(min(v(origin_dates[bb],event1[1]))-max(v(divergence_dates[bb],event1[2])))))/(abs(origin_dates[bb]-divergence_dates[bb]));
+	# prop. of time during background
+	r2[bb]:= 1-r1[bb];
+	branch_rates[bb] := base_branch_rate*((rel_boom*r1[bb])+r2[bb]);
+	}

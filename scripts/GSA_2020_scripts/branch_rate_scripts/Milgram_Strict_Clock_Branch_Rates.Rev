@@ -1,0 +1,15 @@
+# SIMPLE CLOCK
+#num_branches: number of possible branches on a tree
+branch_rates[1] ~ dnExponential(1.0);
+moves.append(mvScale(branch_rates[1], lambda=0.01, tune=true, weight=4));
+moves.append(mvScale(branch_rates[1], lambda=0.10, tune=true, weight=4));
+moves.append(mvScale(branch_rates[1], lambda=1.00, tune=true, weight=4));
+for (bn in 2:n_branches)  branch_rates[bn]:=branch_rates[1];
+#if (punctuated) {
+#  for (bn in 1:n_branches)  branch_rates[bn]:=branch_rates[1]*exp_branchings[bn];
+#  } else {
+#  for (bn in 2:n_branches)  branch_rates[bn]:=branch_rates[1];
+#  indy_branch_rates := rep(branch_rates,n_branches);
+#  }
+# set deterministic node to monitor
+mean_rt := branch_rates;

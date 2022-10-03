@@ -1,0 +1,326 @@
+clear();
+#working_directory <- getwd()+"/Documents/RevBayes_Projects";
+if (getwd()=="/Users/peterjwagner" || getwd()=="/Users/peterwagner")  {
+  working_directory <- getwd()+"/Documents/RevBayes_Projects";
+  setwd(working_directory);
+  }
+
+################################################################################
+#
+# RevBayes script: A (no longer so) simple FBD analysis
+#
+# This file: Runs the full MCMC ...
+#
+# authors: Tracy A. Heath, Josh Justison, Joëlle Barido-Sottani, and Walker Pett
+# monkeyed with by: April Wright & Peter Wagner
+#
+################################################################################
+punctuated <- FALSE;
+analysis_name <- "Wed_Sep_14_13-47-52_2022";
+
+#######################
+# Reading in the Data #
+#######################
+# Read the full list of taxa (including all fossils and extant species #
+taxon_file = "data/Simulated_Fossil_Intervals_" + analysis_name + ".tsv";
+taxa <- readTaxonData(taxon_file)
+
+# Import the morphological character matrix #
+character_data = "data/Simulated_Character_Data_2_States_" + analysis_name + ".nex";
+morpho <- readDiscreteCharacterData(character_data)
+
+## helpers
+otus <- taxa.size();
+n_taxa <- taxa.size();
+moves = VectorMoves();
+num_branches <- 2 * n_taxa - 2;
+
+print("processed data");
+
+##########################################################################################
+# Joint Fossilized Birth-Death Process prior on the topology and fossil occurrence times #
+##########################################################################################
+# set up skyline origination & extinction rates
+max_max_age <- taxa[1].getMaxAge();
+for (i in 2:otus) if (max_max_age < taxa[i].getMaxAge())   max_max_age <- taxa[i].getMaxAge();
+if (round(max_max_age)<max_max_age) {
+  max_max_age <- 1+round(max_max_age);
+  } else {
+  max_max_age <- round(max_max_age);
+  }
+for (i in 1:(2*max_max_age))  timeline[i] <- i;
+
+nbins <- abs(timeline.size());
+for (i in 1:nbins)  {
+  if (i==1)   {
+    bin_durations[i] <- timeline[i];
+    } else   {
+    bin_durations[i] <- timeline[i]-timeline[i-1];
+    }
+  }
+bin_durations <- append(bin_durations,10);
+
+sampling <- rep(1,nbins+1);
+# Define exponential priors on the birth rate and death rate #
+for (i in 1:(nbins+1)) {
+# print(i);
+ speciation_rate[i] ~ dnExponential(1/sqrt(2));
+ # Specify a scale move on the speciation_rate parameter #
+ moves.append(mvScale(speciation_rate[i], lambda=0.01, weight=5));
+ moves.append(mvScale(speciation_rate[i], lambda=0.10, weight=3));
+ moves.append(mvScale(speciation_rate[i], lambda=1.00, weight=1));
+
+ # setup extinction rate relative to speciation rate.
+ extinction_volatility[i] ~ dnNormal(0,1);
+ moves.append(mvSlide(extinction_volatility[i], delta=0.01, weight=5));
+ moves.append(mvSlide(extinction_volatility[i], delta=0.10, weight=3));
+ moves.append(mvSlide(extinction_volatility[i], delta=1.00, weight=1));
+
+ extinction_rate[i] := abs(speciation_rate[i]*sqrt(0.5)*(2^extinction_volatility[i]));
+ turnover[i] := abs(sqrt(0.5)*(2^extinction_volatility[i]));
+
+ # Assume an exponential prior on the rate of sampling fossils (psi) #
+ psi[i] ~ dnExponential(sampling[i]);
+ # Specify a scale move on the psi parameter #
+ moves.append(mvScale(psi[i], lambda=0.01, weight=5));
+ moves.append(mvScale(psi[i], lambda=0.10, weight=3));
+ moves.append(mvScale(psi[i], lambda=1.00, weight=1));
+ moves.append(mvSlide(psi[i], delta=1.00, weight=1));
+
+ } # end skyline loops
+
+# Create deterministic nodes for the diversification and turnover rates so that they can be monitored #
+#extinction_rate := turnover*speciation_rate;
+diversification := speciation_rate - extinction_rate
+
+# Fix the probability of sampling parameter (rho) to 1, #
+rho <- 0.00;
+
+# The FBD is conditioned on a starting time for the process, which is the origin time #
+# Specify a uniform prior on the origin #
+origin_time ~ dnUnif(max_max_age,max_max_age*2);
+
+# Specify a sliding-window move on the origin_time parameter #
+# This move will be applied with 3 different window widths (delta) to help improve mixing #
+moves.append(mvSlide(origin_time, weight=1.0));
+
+### Define the tree-prior distribution as the fossilized birth-death process ###
+#fbd_tree ~ dnFBDP(origin=origin_time, lambda=speciation_rate, mu=extinction_rate, psi=psi, rho=rho, taxa=taxa, timeline=timeline);
+fbd_tree ~ dnBirthDeathSamplingTreatment(origin=origin_time, lambda=speciation_rate, mu=extinction_rate, psi=psi, rho=rho, taxa=taxa, timeline=timeline);
+# Specify moves on the tree and node times #
+moves.append(mvFNPR(fbd_tree, weight=15.0));
+moves.append(mvCollapseExpandFossilBranch(fbd_tree, origin_time, weight=6.0))
+
+# These moves update the node ages #
+moves.append(mvNodeTimeSlideUniform(fbd_tree, weight=40.0))
+# Because we are conditioning on the origin time, we must also sample the root node age #
+moves.append(mvRootTimeSlideUniform(fbd_tree, origin_time, weight=5.0))
+
+### Use stratigraphic range data to explicitly sample the fossil occurence times ###
+# Use a for loop to create a uniform distribution on the occurence time for each fossil #
+# The boundaries of the uniform distribution are specified in the tsv file #
+fossils = fbd_tree.getFossils();
+for(i in 1:fossils.size())  {
+#  fossils[i]
+  t[i] := tmrca(fbd_tree, clade(fossils[i]))
+
+  a_i = fossils[i].getMinAge()
+  b_i = fossils[i].getMaxAge()
+
+  F[i] ~ dnUniform(t[i] - b_i, t[i] - a_i)
+  F[i].clamp(0)
+  }
+
+# We assume a strict morphological clock rate, drawn from an exponential prior #
+#clock_morpho ~ dnExponential(1.0)
+#moves.append(mvScale(clock_morpho, weight=4.0))
+
+ucln_mean ~ dnExponential(2.0)
+### we will also estimate the standard deviation of the lognormal (ucln_sigma) with an exponential hyperprior
+ucln_sigma ~ dnExponential(3.0)
+### we can create deterministic nodes for the variance and mu of the lognormal
+ucln_var := ucln_sigma * ucln_sigma
+ucln_mu := ln(ucln_mean) - (ucln_var * 0.5)
+### both the ucln_mean and ucln_sigma will be operated on by scale moves
+moves.append(mvScale(ucln_mean, lambda=1.0, tune=true, weight=4.0))
+moves.append(mvScale(ucln_sigma, lambda=0.5, tune=true, weight=4.0))
+
+# Add a move to sample the fossil times #
+moves.append(mvFossilTimeSlideUniform(fbd_tree, origin_time, weight=5.0))
+print("processed FBD");
+
+#Set up Gamma-distributed rate variation.
+alpha_morpho ~ dnExponential(1.0)
+rates_morpho := fnDiscretizeGamma(alpha_morpho, alpha_morpho, 4)
+
+#Moves on the parameters to the Gamma distribution.
+moves.append(mvScale(alpha_morpho, weight=5.0))
+
+num_samp_anc := fbd_tree.numSampledAncestors();
+if (punctuated) {
+  pr_pe <- 1; # probability of cladogenesis per divergence; = 1.0 for pure PE model; minimum of 0.5 for mixed gradual + PE
+  for (bn in 1:num_branches) {
+    branch_lengths[bn]:=fbd_tree.branchLength(bn);               # this is branch *duration* not expected change!
+
+    divergence_dates[bn]:=fbd_tree.nodeAge(bn);                   # this is when a hypothesized ancestor diverges or an OTU is first seen;
+    # get the bin ("stage", etc.) in which lineage diverges/gives rise to OTU
+    divergence_bin[bn]:=ceil(fbd_tree.nodeAge(bn));
+    # get the time between divergence/appearance & end of bin/stage/etc.
+    divergence_offset[bn]:=abs((timeline[divergence_bin[bn]]-bin_durations[divergence_bin[bn]])-divergence_dates[bn]);
+
+    origin_dates[bn]:=fbd_tree.branchLength(bn)+fbd_tree.nodeAge(bn); # this is when a lineage diverged from its ancestor
+    # get the bin ("stage", etc.) in which lineage diverged from rest of clade
+    origin_bin[bn]:=ceil(origin_dates[bn]);
+    # get the time between onset of origin bin & divergence of lineage from rest of tree
+    origin_offset[bn]:=timeline[origin_bin[bn]]-origin_dates[bn];
+
+    # "synoptic" range of ghost taxon/lineage within tree
+    bin_span[bn]:=abs(origin_bin[bn]:divergence_bin[bn]);
+    ttl_bins[bn]:=abs(bin_span[bn].size());
+    a[bn]:=rep(0,divergence_bin[bn]-1);
+    rn[bn]:=rep(1,ttl_bins[bn]);
+    z[bn]:=rep(0,(nbins+1-origin_bin[bn]));
+    ghost_taxon[bn] := append(append(a[bn],rn[bn]),z[bn]);
+    local_branch_rates[bn] ~ dnLnorm(ucln_mu, ucln_sigma);
+    moves.append(mvScale(local_branch_rates[bn],lambda=1.0,tune=true,weight=2.0));
+    exp_branchings[bn] := abs(pr_pe + sum(ghost_taxon[bn]*(speciation_rate*bin_durations))-(origin_offset[bn]*speciation_rate[origin_bin[bn]]+divergence_offset[bn]*speciation_rate[divergence_bin[bn]]));
+    branch_rates[bn] := abs(local_branch_rates[bn]*exp_branchings[bn]);
+    exp_subsequent_branches[bn] :=(sum(ghost_taxon[bn]*(speciation_rate*bin_durations))-(((origin_offset[bn]*speciation_rate[origin_bin[bn]])+(divergence_offset[bn]*speciation_rate[divergence_bin[bn]]))))
+    exp_speciations_per_myr[bn] :=(fbd_tree.branchLength(bn)+exp_subsequent_branches[bn])/fbd_tree.branchLength(bn)
+    ave_speciation_rate[bn] := (sum(ghost_taxon[bn]*(speciation_rate*bin_durations))-(((origin_offset[bn]*speciation_rate[origin_bin[bn]])+(divergence_offset[bn]*speciation_rate[divergence_bin[bn]]))))/fbd_tree.branchLength(bn);          #    exp_subsequent_branches[bn]:=(sum(ghost_taxon[bn]*(speciation_rate*bin_durations))-(((origin_offset[bn]*speciation_rate[origin_bin[bn]])+(divergence_offset[bn]*speciation_rate[divergence_bin[bn]]))))
+    #    exp_speciations_per_myr[bn]:= (branch_lengths[bn] + sum(ghost_taxon[bn]*(speciation_rate2*bin_durations))-(initiation_offset[bn]*speciation_rate2[initiation_bin[bn]]+termination_offset[bn]*speciation_rate2[termination_bin[bn]]))/branch_lengths[bn];
+    exp_speciations_per_myr[bn] := (branch_lengths[bn]+exp_subsequent_branches[bn])/branch_lengths[bn];
+    ave_speciation_rate[bn] := (sum(ghost_taxon[bn]*(speciation_rate*bin_durations))-(((origin_offset[bn]*speciation_rate[origin_bin[bn]])+(divergence_offset[bn]*speciation_rate[divergence_bin[bn]]))))/fbd_tree.branchLength(bn);
+    alpha_forward := abs(-exp_branchings[bn]*(1+ave_speciation_rate[bn]))
+    alpha_backwards := abs(exp_branchings[bn]*(1+ave_speciation_rate[bn]))
+    alpha_three := abs(exp_branchings[bn]*(1+ave_speciation_rate[bn]))
+
+    rates <- simplex(alpha_forward, alpha_backwards, alpha_three)
+    Q_morpho[bn] := fnF81(rates);
+#    Q_morpho[bn]
+    }
+  ### add 2 more moves on the *local* branch rate vector
+  moves.append(mvVectorScale(local_branch_rates,lambda=1.0,tune=true,weight=2.0))
+  moves.append(mvVectorSingleElementScale(local_branch_rates,lambda=30.0,tune=true,weight=1.0))
+  root_state <- simplex(alpha_forward, alpha_backwards, alpha_three)
+  phyMorpho ~ dnPhyloCTMC(tree=fbd_tree, siteRates=rates_morpho, branchRates=branch_rates, Q=Q_morpho, type="Standard", coding="variable", rootFrequencies = root_state)
+  phyMorpho.clamp(morpho);
+  } else {
+  exp_branchings = rep(1,num_branches);
+  num_cats = 2
+  dir_alpha ~ dnExponential(1)
+  moves.append( mvScale(dir_alpha, lambda=1, weight=4.0 ))
+
+  # Create a vector of how many different state frequencies we will need. We are working with
+  # binary data and will only need two. If you were working with multistate data, you could
+  # repeat the dir_alpha value for as many states as you need.
+
+  pi_prior := v(dir_alpha,dir_alpha,dir_alpha)
+
+  # Loop over the categories. For each category, draw state frequencies from a Dirichlet. Use
+  # those state values to initialize the Q matrix.
+
+  for (i in 1:num_cats) {
+    pi[i] ~ dnDirichlet(pi_prior)
+    freq_zero[i] := pi[i][1]
+    freq_one[i]  := pi[i][2]
+      freq_two[i]  := pi[i][3]
+      moves.append( mvBetaSimplex(pi[i], alpha=10, weight=4.0) )
+
+      # now also set up the opposite rate matrix
+      pi[num_cats+i] := simplex(freq_one[i] , freq_zero[i])
+
+      Q_morpho[i] := fnF81(pi[i])
+      Q_morpho[num_cats+i] := fnF81(pi[num_cats+i])
+      }
+  matrix_probs <- simplex( rep(1,2*num_cats) )
+  #Set up Gamma-distributed rate variation.
+  alpha_morpho ~ dnExponential( 1.0 )
+  rates_morpho := fnDiscretizeGamma( alpha_morpho, alpha_morpho, 4 )
+
+  #Moves on the parameters to the Gamma distribution.
+  moves.append( mvScale(alpha_morpho, weight=5.0) )
+
+  # We assume a strict morphological clock rate, drawn from an exponential prior #
+  #clock_morpho ~ dnExponential(1.0)
+  #moves.append( mvScale(clock_morpho, weight=4.0) )
+
+  ucln_mean ~ dnExponential(2.0)
+  ### we will also estimate the standard deviation of the lognormal (ucln_sigma) with an exponential hyperprior
+  ucln_sigma ~ dnExponential(3.0)
+  ### we can create deterministic nodes for the variance and mu of the lognormal
+  ucln_var := ucln_sigma * ucln_sigma
+  ucln_mu := ln(ucln_mean) - (ucln_var * 0.5)
+  ### both the ucln_mean and ucln_sigma will be operated on by scale moves
+  moves.append(mvScale(ucln_mean, lambda=1.0, tune=true, weight=4.0))
+  moves.append(mvScale(ucln_sigma, lambda=0.5, tune=true, weight=4.0))
+
+  for (i in 1:num_branches){
+      branch_rates[i] ~ dnLnorm(ucln_mu, ucln_sigma)
+      moves.append(mvScale(branch_rates[i],lambda=1.0,tune=true,weight=2.0))
+      }
+  ### add 2 more moves on the branch rate vector
+  moves.append(mvVectorScale(branch_rates,lambda=1.0,tune=true,weight=2.0))
+  moves.append(mvVectorSingleElementScale(branch_rates,lambda=30.0,tune=true,weight=1.0))
+  phyMorpho ~ dnPhyloCTMC(tree=fbd_tree, siteRates=rates_morpho, branchRates=branch_rates, Q=Q_morpho, type="Standard", coding="variable", siteMatrices=matrix_probs)
+  phyMorpho.clamp(morpho)
+  }
+
+### a helpful parameter to monitor
+mean_rt := mean(branch_rates);
+
+### Create the substitution model and clamp with our observed Standard data ###
+# Here we use the option siteMatrices=true specify that the vector Q #
+# represents a site-specific mixture of rate matrices #
+# We also condition on observing only variable characters using coding="variable" #
+
+
+########
+# MCMC #
+########
+
+# initialize the model object #
+mymodel = model(fbd_tree);
+
+monitors = VectorMonitors()
+
+# Create a vector of monitors #
+output_file <- "output/Simulated_" + analysis_name;
+if (punctuated) {
+  output_file <- output_file + "_punctuated_moves_Dated"
+  } else {
+  output_file <- output_file + "_gradual_moves_Dated"
+  }
+output_file1 <- output_file + ".log";
+output_file2 <- output_file + ".tre";
+
+# 1. for the full model #
+monitors.append(mnModel(filename=output_file1, printgen=100, exclude = ["F"]));
+
+# 2. the tree #
+monitors.append(mnFile(filename=output_file2, printgen=100, fbd_tree));
+
+# 3. and a few select parameters to be printed to the screen #
+monitors.append(mnScreen(printgen=100))
+
+# Initialize the MCMC object #
+mymcmc = mcmc(mymodel, monitors, moves)
+
+# Run the MCMC #
+mymcmc.run(generations=1000000);
+
+no_runs <- 1;
+tree_files <- output_file2;
+maj_rule_files <- output_file + "_maj_rule.tre";
+most_probable_files <- output_file + "_simple_map.tre";
+
+#source("scripts/Accersi_Consensus_Tree.Rev");
+#source("scripts/Accersi_Most_Probable_Tree.Rev");
+trace = readTreeTrace(output_file2, treetype="clock");
+trace.setBurnin(0.25);
+consensusTree(trace, file=maj_rule_files);
+mapTree(trace, file=most_probable_files);
+
+
+# Quit RevBayes #
+q()

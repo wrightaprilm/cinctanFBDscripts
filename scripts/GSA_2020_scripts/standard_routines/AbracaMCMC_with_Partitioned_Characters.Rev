@@ -1,0 +1,17 @@
+# mymodel: model containing all the parameters to be varied
+# moves: order in which MCMC analyses will alter parameters
+# monitors: output frequencies
+# no_runs: number of chains to runs.
+# burnin_gens: number of "spring training" generations (alterations of parameters)
+#    for initial tuning of parameters.
+# tuning_int: number of generations for warm up
+# running_gens: runs for actual analyses
+
+# setup analyses
+mcmc_analysis = mcmc(mymodel, moves, monitors, nruns=no_runs);
+
+# how long should the burnin be? #(retunes every tuning_int generations);
+mcmc_analysis.burnin(generations=burnin_gens,tuningInterval=tuning_int);
+
+# actual run after burnin.
+mcmc_analysis.run(generations=running_gens);
