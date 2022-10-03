@@ -1,0 +1,241 @@
+# modified from April's script
+taxa <- readTaxonData("data/cincta_fas_fuzzy.tsv")
+
+morpho_f <- readDiscreteCharacterData("data/f_names")
+morpho_nf <- readDiscreteCharacterData("data/nf_block_names")
+moves = VectorMoves()
+monitors = VectorMonitors()
+
+n_taxa <- taxa.size()
+
+num_branches <- 2 * n_taxa - 2
+
+moves = VectorMoves()
+
+monitors = VectorMonitors()
+
+timeline <- v(38.6, 43.0, 49.1);    # post-Danian/Danian/Maastrichtian/Pre-Maastrichtian
+
+for (i in 1:(timeline.size()+1))  {
+
+     	cladogenesis_rate[i] ~ dnExponential(1.471);
+     	moves.append(mvScale(cladogenesis_rate[i], lambda=0.01, weight=5));
+     	moves.append(mvScale(cladogenesis_rate[i], lambda=0.10, weight=3));
+     	moves.append(mvScale(cladogenesis_rate[i], lambda=1.00, weight=1));
+
+      if (i==3)  {
+        turnover[i] ~ dnLognormal(5, 2);
+        } else  {
+        turnover[i] ~ dnLognormal(0.945, 1.926745);
+        }
+      moves.append(mvSlide(turnover[i], delta=0.01, weight=5));
+      moves.append(mvSlide(turnover[i], delta=0.10, weight=3));
+      moves.append(mvSlide(turnover[i], delta=1.00, weight=1));
+
+     	extinction_rate[i] := turnover[i]*cladogenesis_rate[i]
+     	diversification[i] := cladogenesis_rate[i] - extinction_rate[i]
+
+     	psi[i] ~ dnExponential(3.892);
+     	moves.append( mvScale(psi[i], lambda = 0.01) )
+     	moves.append( mvScale(psi[i], lambda = 0.1) )
+     	moves.append( mvScale(psi[i], lambda = 1) );
+      }
+
+# Proportional Taxon Sampling of Youngest Time Slice
+rho <- 0.2;	# 'extant' sampling.
+
+# Establish Basal Divergence Time
+origin_time ~ dnUnif(60.70,65.7);
+moves.append(mvSlide(origin_time, delta=0.01, weight=5));
+moves.append(mvSlide(origin_time, delta=0.10, weight=3));
+moves.append(mvSlide(origin_time, delta=1.00, weight=1));
+
+
+fbd_dist = dnFBDP(originAge=origin_time, lambda=cladogenesis_rate, mu=extinction_rate, psi=psi, rho=rho, timeline=timeline, taxa=taxa, condition="sampling")
+
+
+
+outgroup = clade("Ctenocystis");
+     ingroup = clade("Gyrocystis_platessa","Gyrocystis_testudiformis","Gyrocystis_cruzae","Gyrocystis_badulesiensis","Gyrocystis_erecta","Progyrocystis_disjuncta","Protocinctus_mansillaensis","Elliptocinctus_barrandei","Elliptocinctus_vizcainoi","Sucocystis_theronensis","Sucocystis_bretoni","Lignanicystis_barriosensis","Undatacinctus_undata","Sucocystis_acrofera","Undatacinctus_quadricornuta","Undatacinctus_melendezi","Asturicystis_jaekeli","Sotocinctus_ubaghsi","Trochocystites_bohemicus","Trochocystoides_parvus","Ludwigicinctus_truncatus","Graciacystis_ambigua","Asturicystis_havliceki","Nelegerocystis_ivantzovi","Rozanovicystis_triangularis","Davidocinctus_pembrokensis");
+
+ constraints = v(ingroup)
+
+
+     fbd_tree ~ dnConstrainedTopology(fbd_dist, constraints=constraints)
+
+
+     moves.append(mvFNPR(fbd_tree, weight=15.0))
+
+     moves.append(mvCollapseExpandFossilBranch(fbd_tree, origin_time, weight=6.0))
+
+     moves.append(mvNodeTimeSlideUniform(fbd_tree, weight=40.0))
+
+     moves.append(mvRootTimeSlideUniform(fbd_tree, origin_time, weight=5.0))
+
+
+
+     intervals = readDataDelimitedFile(file="data/cincta_fas_fuzzy.tsv", header=true)
+
+
+
+
+ # Setup the fossil tip sampling #
+
+ # Use a for loop to create a uniform distribution on the occurence time for each fossil #
+
+ # The boundaries of the uniform distribution are specified in the tsv file #
+
+ fossils = fbd_tree.getFossils()
+ for(i in 1:fossils.size())
+ {
+     t[i] := tmrca(fbd_tree, clade(fossils[i]))
+
+     a_i = fossils[i].getMinAge()
+     b_i = fossils[i].getMaxAge()
+
+     F[i] ~ dnUniform(t[i] - b_i, t[i] - a_i)
+     F[i].clamp( 0 )
+ }
+
+ # Add a move to sample the fossil times #
+ moves.append( mvFossilTimeSlideUniform(fbd_tree, origin_time, weight=5.0) )
+
+
+     num_samp_anc := fbd_tree.numSampledAncestors()
+
+     pruned_fbd_tree := fnPruneTree(fbd_tree, prune=v("Asturicystis_havliceki","Nelegerocystis_ivantzovi","Rozanovicystis_triangularis","Davidocinctus_pembrokensis"))
+
+
+     ucln_mean ~ dnExponential(2.0)
+
+     # sigma
+
+     ucln_sigma ~ dnExponential(3.0)
+
+     # Set a deterministic node on sigma^2
+
+     ucln_var := ucln_sigma * ucln_sigma
+
+     ucln_mu := ln(ucln_mean) - (ucln_var * 0.5)
+
+     moves.append(mvScale(ucln_mean, lambda=1.0, tune=true, weight=4.0))
+
+     moves.append(mvScale(ucln_sigma, lambda=0.5, tune=true, weight=4.0))
+
+
+
+     for (i in 1:num_branches){
+
+         branch_rate_var[i] ~ dnLognormal(ucln_mu, ucln_sigma)
+
+         moves.append(mvScale(branch_rate_var[i], lambda=1, tune=true, weight=2.0))
+
+     }
+
+     moves.append(mvVectorScale(branch_rate_var,lambda=1.0,tune=true,weight=2.0))
+
+     moves.append(mvVectorSingleElementScale(branch_rate_var,lambda=30.0,tune=true,weight=1.0))
+
+
+
+
+     alpha_morpho ~ dnUniform( 0, 1E6 )
+
+     rates_morpho := fnDiscretizeGamma( alpha_morpho, alpha_morpho, 4 )
+
+     #Moves on the parameters of the Gamma distribution.
+
+     moves.append(mvScale(alpha_morpho, lambda=1, weight=2.0))
+     ucln_mean ~ dnExponential(2.0)
+     ucln_sigma ~ dnExponential(3.0)
+     ucln_var := ucln_sigma * ucln_sigma
+     ucln_mu := ln(ucln_mean) - (ucln_var * 0.5)
+     moves.append( mvScale(ucln_mean, lambda=1.0, tune=true, weight=4.0))
+     moves.append( mvScale(ucln_sigma, lambda=0.5, tune=true, weight=4.0))
+     for(i in 1:num_branches){
+        branch_rates[i] ~ dnLnorm(ucln_mu, ucln_sigma)
+        moves.append( mvScale(branch_rates[i], lambda=1, tune=true, weight=2.))
+     }
+
+
+
+
+
+     n_max_states <- 3
+     idx = 1
+     morpho_f_bystate <- morpho_f.setNumStatesVector()
+     for (i in 1:n_max_states) {
+         nc = morpho_f_bystate[i].nchar()
+         # for non-empty character blocks
+         if (nc > 0) {
+             # make i-by-i rate matrix
+             q[idx] <- fnJC(i)
+     # create model of evolution for the character block
+             m_morph[idx] ~ dnPhyloCTMC( tree=fbd_tree,
+                                         Q=q[idx],
+                                         nSites=nc,
+                                         siteRates=rates_morpho,
+                                         branchRates=branch_rates,
+                                         type="Standard")
+
+             # attach the data
+     	    m_morph[idx].clamp(morpho_f_bystate[i])
+
+             # increment counter
+             idx = idx + 1
+     idx
+     }
+     }
+
+     n_max_states <- 4
+     morpho_nf_bystate <- morpho_nf.setNumStatesVector()
+     for (i in 1:n_max_states) {
+         nc = morpho_nf_bystate[i].nchar()
+         # for non-empty character blocks
+         if (nc > 0) {
+             # make i-by-i rate matrix
+             q[idx] <- fnJC(i)
+     # create model of evolution for the character block
+             m_morph[idx] ~ dnPhyloCTMC( tree=fbd_tree,
+                                         Q=q[idx],
+                                         nSites=nc,
+                                         siteRates=rates_morpho,
+                                         branchRates=branch_rates,
+                                         type="Standard")
+
+             # attach the data
+     	    m_morph[idx].clamp(morpho_nf_bystate[i])
+
+             # increment counter
+             idx = idx + 1
+     idx
+     }
+     }
+
+
+
+     mymodel = model(fbd_tree)
+
+
+
+     monitors.append(mnModel(filename="output/cinc6_dated.log", printgen=10))
+
+
+
+     monitors.append(mnFile(filename="output/cinc6_dated.trees", printgen=10, pruned_fbd_tree))
+
+
+
+     monitors.append(mnScreen(printgen=10, num_samp_anc, origin_time))
+
+
+
+     mymcmc = mcmc(mymodel, monitors, moves)
+
+
+
+     mymcmc.run(generations=1000000)
+
+
+
+     q()

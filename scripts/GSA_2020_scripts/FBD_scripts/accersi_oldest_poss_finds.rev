@@ -1,0 +1,8 @@
+max_age <- taxa[1].getMaxAge();
+for (i in 2:n_taxa) if (max_age < taxa[i].getMaxAge())   max_age <- taxa[i].getMaxAge();
+if (round(max_age)<max_age) {
+  max_age <- 1+round(max_age);
+  } else {
+  max_age <- round(max_age);
+  }
+max_max_age <- 2*max_age

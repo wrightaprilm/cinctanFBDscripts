@@ -1,0 +1,12 @@
+alpha ~ dnExponential(1.0);		# "base" rate of change
+ucln_sigma_ch ~ dnExponential(1.0); 	# log standard deviation for among-character variation in rates
+ucln_sigma_br ~ dnExponential(1.0); 	# log standard deviation for among-branch variation in rates
+char_rate_var := fnDiscretizeDistribution(dnLognormal(mean=0,sd=ucln_sigma_ch), 4);	# median will be 1.0
+branch_rate_var := fnDiscretizeDistribution(dnLognormal(mean=0,sd=ucln_sigma_br),4);	# median will be 1.0
+k <- 0;
+for (cc in 1:4)
+	for (bb in 1:4)
+		rate_var[++k]:=alpha*char_rate_var[cc]*branch_rate_var[bb];		# median will be ~ alpha
+moves.append(mvScale(alpha, lambda=1, tune=true, weight=2.0));
+moves.append(mvScale(ucln_sigma_ch, lambda=1, tune=true, weight=2.0));
+moves.append(mvScale(ucln_sigma_br, lambda=1, tune=true, weight=2.0));

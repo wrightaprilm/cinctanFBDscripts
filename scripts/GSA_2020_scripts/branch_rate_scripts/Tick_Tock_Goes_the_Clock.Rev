@@ -1,0 +1,20 @@
+# clock_model: "strict" for static rate; "lognormal" for lognormal variation; "dirichlet" for Dirichlet distribution
+# ttl_rate_partitions: total number of rate partitions (usually just 1)
+# branch rates are established in advance so that all characters shift up/down on an independent branch
+# these all return base_branch_rates, which is a scalar for clock models, but a 1:n_branches long vector for other models.
+# partition_char_rate_var: character rate variation for this partition (from Character_Development.Rev)
+if (clock_model=="strict")	{
+	source("scripts/branch_rate_scripts/Milgram_Strict_Clock_Branch_Rates.Rev");
+	} else if (clock_model=="uncorrelated" || clock_model=="lognormal")	{
+	source("scripts/branch_rate_scripts/Milgram_Uncorrelated_Lognormal_Relaxed_Clock_Branch_Rates.Rev");
+	} else if (clock_model=="big_bang" || clock_model=="early_burst")	{
+	source("scripts/branch_rate_scripts/Milgram_Early_Burst_Branch_Rates.Rev");
+	# rate variation on branches comes from decay over time only
+	} else if (clock_model=="autocorrelated")	{
+	source("scripts/branch_rate_scripts/Milgram_Autocorrelated_Lognormal_Relaxed_Clock_Branch_Rates.Rev");
+	}
+if (clock_model=="strict")	{
+	ind_branch_rates[pt] := rep(branch_rates,n_branches);
+	} else {
+	ind_branch_rates[pt] := branch_rates;
+	}

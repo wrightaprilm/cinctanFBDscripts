@@ -1,0 +1,71 @@
+# read stratigraphic ranges
+taxa = readTaxonData(file = "data/crassatellid_ranges.tsv")
+n_taxa <- taxa.size();
+n_branches <- (2 * n_taxa) - 2;
+
+# read fossil counts
+finds_matrix <- readDataDelimitedFile(file = "data/crassatellid_rock_counts.tsv", header = true, rownames = true);
+
+# interval boundaries
+timeline <- v(15.97,17.95,20.44,23.04,25.2,27.29,30.3,33.9,35.4,37.78,41.03,42.4,45.4,48.07,51.05,53.5,56,59.24,61.66,63.3,66.04,67.65,70.45,72.75,74.2,76.3,78.3,81,83.6,85.7,88.1,89.4) - 13.75;
+bin_duration[1] <- 15.97-13.75;
+for (i in 2:timeline.size()) bin_duration[i] <- abs(timeline[i]-timeline[i-1]);
+
+# Create some vector for the moves and monitors of this analysis
+moves = VectorMoves();
+monitors = VectorMonitors();
+
+# specify FBDR model parameters
+for (i in 1:(timeline.size()+1))  {
+  fbd_p[i] ~ dnExp(1/0.573);
+  turnover[i] ~ dnUnif(0.9, 1.05);
+  fbd_r[i] ~ dnExp(alpha);
+
+  fbd_q[i] := turnover[i]*lambda[i];
+  diversification[i] := fbd_p[i] - fbd_q[i];
+
+  moves.append(mvSlide(turnover, delta=0.01, weight=5));
+  moves.append(mvSlide(turnover, delta=0.10, weight=3));
+  moves.append(mvSlide(turnover, delta=1.00, weight=1));
+
+  moves.append( mvScale(fbd_p[i], lambda = 0.01) )
+  moves.append( mvScale(fbd_p[i], lambda = 0.1) )
+  moves.append( mvScale(fbd_p[i], lambda = 1) )
+
+  moves.append( mvScale(fbd_r[i], lambda = 0.01) )
+  moves.append( mvScale(fbd_r[i], lambda = 0.1) )
+  moves.append( mvScale(fbd_r[i], lambda = 1) )
+}
+
+rho <- 0.2;
+
+# model 1
+bd ~ dnFBDRMatrix(taxa=taxa, fbd_p=fbd_p, fbd_q=fbd_q, fbd_r=fbd_r, rho=rho, timeline=timeline, finds_matrix=finds_matrix)
+
+moves.append( mvMatrixElementScale(bd, fbd_p = 0.01, weight=taxa.size()) )
+moves.append( mvMatrixElementScale(bd, fbd_p = 0.1, weight=taxa.size()) )
+moves.append( mvMatrixElementScale(bd, fbd_p = 1, weight=taxa.size()) )
+
+moves.append( mvMatrixElementSlide(bd, delta = 0.01, weight=taxa.size()) )
+moves.append( mvMatrixElementSlide(bd, delta = 0.1, weight=taxa.size()) )
+moves.append( mvMatrixElementSlide(bd, delta = 1, weight=taxa.size()) )
+
+mymodel = model(bd)
+
+# add monitors
+monitors.append( mnScreen(fbd_p, fbd_q, fbd_r, printgen=100) )
+monitors.append( mnModel(filename="output/model1.log",printgen=10) )
+
+# monitors to print RevGagets input
+monitors.append( mnFile(filename="output/model1_speciation_rates.log",fbd_p,printgen=10) )
+monitors.append( mnFile(filename="output/model1_speciation_times.log",timeline,printgen=10) )
+monitors.append( mnFile(filename="output/model1_extinction_rates.log",fbd_q,printgen=10) )
+monitors.append( mnFile(filename="output/model1_extinction_times.log",timeline,printgen=10) )
+monitors.append( mnFile(filename="output/model1_sampling_rates.log",fbd_r,printgen=10) )
+monitors.append( mnFile(filename="output/model1_sampling_times.log",timeline,printgen=10) )
+
+# run the analysis
+mymcmc = mcmc(mymodel, moves, monitors, moveschedule="random")
+mymcmc.run(30000)
+
+q()

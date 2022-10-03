@@ -1,0 +1,23 @@
+# among_char_var: gamma, lognormal or uniform; we'll get Dirichlet in eventually
+# ttl_rate_partitions: total number of rate partitions (usually just 1)
+# Setup gamma or lognormal variation shared by characters in each partition.
+if (among_char_var=="uniform")	{
+	alpha[pt]=1;
+	}	else {
+	alpha[pt] ~ dnExponential( 1.0 );
+	moves.append(mvScale(alpha[pt], lambda=0.01, tune=true, weight=5));
+	moves.append(mvScale(alpha[pt], lambda=0.10, tune=true, weight=3));
+	moves.append(mvScale(alpha[pt], lambda=1.00, tune=true, weight=1));
+	}
+# set up rate distribution to describe variation among characters
+if (among_char_var=="gamma")	{
+	char_rate_var[pt] := fnDiscretizeGamma( alpha[pt], alpha[pt], 4 );
+	# NOTE: this sets the shape and scale parameters equal so that the mean is always 1.0.
+	} else if (among_char_var=="lognormal" || among_char_var=="log_normal")	{
+	char_rate_var[pt] := fnDiscretizeDistribution(dnLognormal(mean=0,sd=alpha[pt]), 4);
+	# NOTE: This varies only log-variance; the geometric mean (= median) is always 1.0.
+	} else if (among_char_var=="uniform")	{
+	char_rate_var[pt] := fnDiscretizeDistribution(dnLognormal(mean=0,sd=0), 4);
+#	char_rate_var[pt] <- fnDiscretizeDistribution(dnLognormal(mean=0,sd=0), 4);
+#	char_rate_var[pt] <- v(1,1,1,1);
+	}

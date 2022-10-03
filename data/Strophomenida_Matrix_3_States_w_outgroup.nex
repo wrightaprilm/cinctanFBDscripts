@@ -1,0 +1,46 @@
+#NEXUS
+
+BEGIN DATA;
+	DIMENSIONS  NTAX=38 NCHAR=7;
+	FORMAT DATATYPE = STANDARD RESPECTCASE GAP = - MISSING = ? SYMBOLS = " 0 1 2 ";
+	MATRIX
+	Sowerbyites           01?12?0
+	Strophomena           20220-0
+	Keilamena             20?2??0
+	Tetraphalerella       20?20?0
+	Actinomena            20002-0
+	Holtedahlina          20?20?1
+	Longvillia            20?2??0
+	Leigerina             20?00?0
+	Pseudostrophomena     21?01?0
+	Furcitella            21?0???
+	Bekkerina             2111100
+	Bellimurina           21??000
+	Biparetis             2112000
+	Dactylogonia          2012000
+	Geniculina            20?0000
+	Katastrophomena       2110010
+	Chunanomena           21?0??0
+	Luhaia                ???2010
+	Molongcola            20102?0
+	Murinella             2?000?0
+	Oepikina              2011000
+	Quondongia            0?10??0
+	Crassoseptaria        01?0111
+	Haljalanites          2?12??0
+	Colaptomena           12-21-0
+	Kjerulfina            12-0?20
+	Rafinesquina          12-21-0
+	Megamyonia            20?11?0
+	Rhipidomena           20120?0
+	Kjaerina              12-2?00
+	Septomena             2102?00
+	Leptaena              12??100
+	Kiaeromena            ??-2?00
+	Bekkeromena           2????00
+	Glyptomena            21-0?-0
+	Paromalomena          2??0??2
+	Platymena             21-0?-0
+	Resupinsculpta        21?02?0
+;
+END;

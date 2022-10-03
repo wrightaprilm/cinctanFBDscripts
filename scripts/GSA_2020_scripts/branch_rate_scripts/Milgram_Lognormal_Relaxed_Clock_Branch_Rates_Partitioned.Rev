@@ -1,0 +1,36 @@
+# UNCORRELATED LOGNORMAL RATES
+# (mu = log(M) - (sigma^2 / 2))
+# *can be modified to use exponential or independent gamma rates
+# written by D. Wright 2019-06
+# n_taxa: number of taxa (from main script);
+# ttl_rate_partitions: number of partitions (from main script)
+#NOTE: This varies both the geometric mean and the log-variance.
+
+n_branches <- (2*n_taxa)-2;
+for (pp in 1:ttl_rate_partitions)	{
+	# hyperpriors on geometric mean and log-variance
+	ucln_mean[pp] ~ dnExponential(2.0)	# geometric mean
+	ucln_sigma[pp] ~ dnExponential(3.0) # (log) standard deviation
+	ucln_var[pp] := ucln_sigma[pp] * ucln_sigma[pp] # (log) variance
+
+	# set deterministic parameter giving mu (geometric mean [median] base rate) on branch rates
+	ucln_mu[pp] := ln(ucln_mean[pp]) - (ucln_var[pp] * 0.5)
+
+	# mcmc moves to alter lognormal parameters (geometric mean & log variance)
+	moves.append(mvScale(ucln_mean[pp], lambda=1.0, tune=true, weight=4.0));
+	moves.append(mvScale(ucln_sigma[pp], lambda=0.5, tune=true, weight=4.0));
+
+	# assign rates to branches and add mcmc moves to let them freely vary
+	for (bb in 1:n_branches)	{
+		branch_rate_partitions[pp][bb] ~ dnLnorm(ucln_mu[pp], ucln_sigma[pp]);
+		moves.append(mvScale(branch_rate_partitions[pp][bb], lambda=1, tune=true, weight=2.0));
+		}
+
+	# mcmc moves that will affect all of the branches simultaneously
+	moves.append(mvVectorScale(branch_rate_partitions[pp],lambda=1.0,tune=true,weight=2.0));
+	moves.append(mvVectorSingleElementScale(branch_rate_partitions[pp],lambda=30.0,tune=true,weight=1.0));
+
+# set deterministic nodes to monitor
+	branch_rates[pp] := branch_rate_partitions[pp];
+	mean_rt[pp] := mean(branch_rate_partitions[pp]);
+	}

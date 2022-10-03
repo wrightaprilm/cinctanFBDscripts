@@ -1,0 +1,14 @@
+#cont_filename: string giving names of nexus files with continuous data
+
+nfiles <- cont_filename.size();
+debug <- TRUE;
+cont_chardata <- readContinuousCharacterData(cont_filename);
+cchar <- cont_chardata.nchar(); if (debug)  #print("line 6");
+log_sigma ~ dnNormal(0, sd=1); if (debug)  #print("line 7");
+clock_cont := 10^log_sigma;   if (debug)  #print("line 8"); # BM sigma
+moves.append(mvSlide(log_sigma, delta=0.5, weight=1, tune=false));  if (debug)  #print("line 9");
+moves.append(mvSlide(log_sigma, delta=0.1, weight=2, tune=false));  if (debug)  #print("line 10");
+moves.append(mvSlide(log_sigma, delta=.02, weight=1, tune=false));  if (debug)  #print("line 11");
+phyContinuous ~ dnPhyloBrownianREML(tree=fbd_tree, branchRates=clock_cont, nSites=cchar); ;  if (debug)  #print("line 12");
+phyContinuous.clamp(cont_chardata);
+phyContinuous;

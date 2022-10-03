@@ -1,0 +1,35 @@
+for (nds in 1:n_max_states[pt]) {
+nds <- 0;
+while (nds < n_max_states[pt]) {
+nds <- nds+1;
+morpho_bystate[nds] <- morpho;
+morpho_bystate[nds].setNumStatesPartition(nds);
+nc = morpho_bystate[nds].nchar();
+
+if (nc > 0)  {
+  # set up transition matrices
+update = "Doing " + nds + " State Characters";
+print(update);
+if (partition_ordering[pt]=="ordered") {
+source("scripts/Accio_Mk_Ordered_k_State_Character.Rev");
+Q[idx]<-Qo;# Qo is "ordered" Q-matrix
+} else {
+if (nds<2) {
+Q[idx]<-fnJC(2);
+} else	{
+Q[idx]<-fnJC(nds);
+} # end variable characters
+}
+update = "Got Q Matrix for " + nc + " State Characters";
+print(update);
+if (nds==1) {
+phyMorpho[idx] ~ dnPhyloCTMC(tree=tau,Q=Q[idx],nSites=nc,siteRates=char_rate_var[pt],branchRates=ind_branch_rates[pt],type="Standard",coding="all");
+} else {
+phyMorpho[idx] ~ dnPhyloCTMC(tree=tau,Q=Q[idx],nSites=nc,siteRates=char_rate_var[pt],branchRates=ind_branch_rates[pt],type="Standard",coding=coding_bias[pt]);
+}
+update = "Did dnPhyloCTMC for State " + nc;
+print(update);
+phyMorpho[idx].clamp(morpho_bystate[nds]);
+idx = idx+1;
+} # end case where we have this many states with this partition
+} # we've examined all of the states in this partition;

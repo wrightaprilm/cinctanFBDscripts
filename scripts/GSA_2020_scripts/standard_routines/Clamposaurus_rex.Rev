@@ -1,0 +1,40 @@
+# partition_ordering: ordered vs. unordered
+# ttl_rate_partitions: number of rate partitions;
+# n_max_states: maximum number of states per partition;
+# fbd_tree: phylogeny
+# char_rate_var: rate variation among characters
+# ind_branch_rates: rates for individual branches
+# coding bias for individual rate partitions
+# morpho_bystate[nds].getIncludedCharacterIndices()
+
+#relv_states <- morpho.getStateDescriptions();
+#ttl_relv_states <- relv_states.size();
+for (nds in 1:n_max_states[pt])	{
+	morpho_bystate[nds] <- morpho;
+	morpho_bystate[nds].setNumStatesPartition(nds);
+	nc = morpho_bystate[nds].nchar();
+
+	if (nc > 0) {
+  	# set up transition matrices
+#		update = "Doing " + nds + " State Characters";
+#		print(update);
+		if (partition_ordering[pt]=="ordered")	{
+			source("scripts/standard_routines/Accio_Mk_Ordered_k_State_Character.Rev");
+			Q[idx] <- Qo;	# Qo is "ordered" Q-matrix
+			} else	{
+			k <- max(v(2,nds));
+			Q[idx] <- fnJC(k);
+			}
+#		update = "Got Q Matrix for " + nds + " State Characters";
+#		print(update);
+		if (nds==1)	{
+			phyMorpho[idx] ~ dnPhyloCTMC(tree=fbd_tree,Q=Q[idx],nSites=nc,siteRates=char_rate_var[pt],branchRates=ind_branch_rates[pt],type="Standard",coding="all");
+			} else	{
+			phyMorpho[idx] ~ dnPhyloCTMC(tree=fbd_tree,Q=Q[idx],nSites=nc,siteRates=char_rate_var[pt],branchRates=ind_branch_rates[pt],type="Standard",coding=coding_bias[pt]);
+			}
+		phyMorpho[idx].clamp(morpho_bystate[nds]);
+		update = "Did dnPhyloCTMC for " + nds + " State Characters";
+		print(update);
+		idx = idx+1;
+		} # end case where we have this many states with this partition
+	} # we've examined all of the states in this partition;
