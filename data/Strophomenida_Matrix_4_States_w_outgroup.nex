@@ -1,0 +1,46 @@
+#NEXUS
+
+BEGIN DATA;
+	DIMENSIONS  NTAX=38 NCHAR=1;
+	FORMAT DATATYPE = STANDARD RESPECTCASE GAP = - MISSING = ? SYMBOLS = " 0 1 2 3 ";
+	MATRIX
+	Sowerbyites           1
+	Strophomena           3
+	Keilamena             3
+	Tetraphalerella       3
+	Actinomena            3
+	Holtedahlina          0
+	Longvillia            3
+	Leigerina             3
+	Pseudostrophomena     3
+	Furcitella            ?
+	Bekkerina             1
+	Bellimurina           1
+	Biparetis             1
+	Dactylogonia          1
+	Geniculina            1
+	Katastrophomena       3
+	Chunanomena           0
+	Luhaia                2
+	Molongcola            0
+	Murinella             1
+	Oepikina              1
+	Quondongia            0
+	Crassoseptaria        3
+	Haljalanites          1
+	Colaptomena           1
+	Kjerulfina            1
+	Rafinesquina          1
+	Megamyonia            1
+	Rhipidomena           3
+	Kjaerina              1
+	Septomena             1
+	Leptaena              1
+	Kiaeromena            1
+	Bekkeromena           1
+	Glyptomena            1
+	Paromalomena          1
+	Platymena             1
+	Resupinsculpta        3
+;
+END;
