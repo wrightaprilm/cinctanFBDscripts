@@ -1,0 +1,52 @@
+beta_scale ~ dnLognormal( 0.0, sd=2*0.587405 )
+n_max_states <- 3
+
+
+
+
+
+    idx = 1
+morpho_f_bystate[1] <- morpho_f
+
+for (i in 2:n_max_states) {
+morpho_f_bystate[i] <- morpho_f
+    morpho_f_bystate[i].setNumStatesPartition(i)
+     nc = morpho_f_bystate[i].nchar()
+    # for non-empty character blocks
+      print("nchars:", nc)
+      print("nSTATES:", i)
+      cats := fnDiscretizeBeta(beta_scale, beta_scale, i)
+      for (x in 1:cats.size())
+      {
+        Q_SHDM_f4[x] := fnF81(simplex(cats))
+        }
+        mat_prior_f4 <- rep(1,i)
+        matrix_probs_f4 ~ dnDirichlet(mat_prior_f4)
+        matrix_probs_f4
+        moves.append( mvBetaSimplex(matrix_probs_f4, weight=3.0) )
+        moves.append( mvDirichletSimplex(matrix_probs_f4, weight=1.5) )
+
+        idx = idx + 1
+        }
+
+morpho_nf_bystate[1] <- morpho_nf
+for (i in 2:n_max_states) {
+morpho_nf_bystate[i] <- morpho_nf
+    morpho_nf_bystate[i].setNumStatesPartition(i)
+     nc = morpho_nf_bystate[i].nchar()
+    # for non-empty character blocks
+      print("nchars:", nc)
+      print("nSTATES:", i)
+      cats := fnDiscretizeBeta(beta_scale, beta_scale, i)
+      for (x in 1:cats.size())
+      {
+        Q_SHDM_nf4[x] := fnF81(simplex(cats))
+        }
+        mat_prior_nf4 <- rep(1,i)
+        matrix_probs_nf4 ~ dnDirichlet(mat_prior_nf4)
+        matrix_probs_nf4
+        moves.append( mvBetaSimplex(matrix_probs_nf4, weight=3.0) )
+        moves.append( mvDirichletSimplex(matrix_probs_nf4, weight=1.5) )
+
+        idx = idx + 1
+        }

@@ -1,0 +1,14 @@
+n_max_states <- 4
+
+for (i in 1:n_max_states) {
+    Q_f[i] <- fnJC(i)
+    # increment counter
+
+}
+
+
+for (i in 1:n_max_states) {
+
+        # make i-by-i rate matrix
+        Q_n[i] <- fnJC(i)
+}

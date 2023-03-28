@@ -1,0 +1,10 @@
+# RevBayes v1.1.0
+# 
+# strict clock model for the continous traits
+
+# specify the rate at the root
+log_sigma ~ dnNormal(0, sd=1)
+clock_cont := 10^log_sigma  # BM sigma
+moves.append( mvSlide(log_sigma, delta=0.5, weight=1, tune=false) )
+moves.append( mvSlide(log_sigma, delta=0.1, weight=2, tune=false) )
+moves.append( mvSlide(log_sigma, delta=.02, weight=1, tune=false) )

@@ -1,0 +1,112 @@
+########################################################################
+# Set up appropriate parameters for speciation, extinction & sampling  #
+#   "Seed" numbers based on analyses of Paleobiology Database data.    #
+########################################################################
+# clock
+
+#mean_ra <- 7.0
+#stdv_ra <- 0.25
+#mu_ra <- ln(mean_ra) - ((stdv_ra*stdv_ra) * 0.5)
+
+#root_time ~ dnLognormal(mu_ra, stdv_ra, offset=7.3)
+
+origin_time ~ dnUnif(270, 280)
+moves.append(mvSlide(origin_time, delta = 0.01, weight = 5))
+moves.append(mvSlide(origin_time, delta = 0.1, weight = 3))
+moves.append(mvSlide(origin_time, delta = 1.0, weight = 1))
+
+# Diversification Rates based on Echinodermata
+#speciation_rate ~ dnExponential(1.471);
+speciation_rate ~ dnExponential(10)
+# NOTE: If it gets stuck in this script, then set origination & extinction to 1.0
+moves.append(mvScale(speciation_rate, lambda=0.01, weight=5));
+moves.append(mvScale(speciation_rate, lambda=0.10, weight=3));
+moves.append(mvScale(speciation_rate, lambda=1.00, weight=1));
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+# NOTE: FBD scripts often allow extinction to vary independently of speciation;     #
+# However, empirical studies show that these two rates usually are close to equal   #
+#               and they definitely are not independent.                            #
+# So, here we'll make turnover (ext/orig) an independent variable and use it        #
+#               to scale extinction relative to origination                         #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#turnover ~ dnUnif(0.9, 1.05);
+#moves.append(mvSlide(turnover, delta=0.01, weight=5));
+#moves.append(mvSlide(turnover, delta=0.10, weight=3));
+#moves.append(mvSlide(turnover, delta=1.00, weight=1));
+#extinction_rate := turnover*speciation_rate;
+#diversification := speciation_rate - extinction_rate;
+
+# old extinction stuff. We should not use this, as extinction should not be independent of origination!
+extinction_rate ~ dnExponential(10);
+moves.append(mvScale(extinction_rate, lambda=0.01, weight=5));
+moves.append(mvScale(extinction_rate, lambda=0.10, weight=3));
+moves.append(mvScale(extinction_rate, lambda=1.00, weight=1));
+#turnover := extinction_rate/speciation_rate;
+
+# Fossil Sampling Rates based on collection occupied by Echinodermata
+#psi ~ dnExponential(3.892);
+psi~ dnExponential(10)
+completeness := psi/(extinction_rate+psi);
+moves.append(mvScale(psi, lambda=0.01, weight=5));
+moves.append(mvScale(psi, lambda=0.10, weight=3));
+moves.append(mvScale(psi, lambda=1.00, weight=1));
+
+# Proportional Taxon Sampling of Youngest Time Slice
+rho <- 0.0;	# 'extant' sampling.
+
+# Establish Basal Divergence Time
+origin_time ~ dnUnif(260, 300);
+moves.append(mvSlide(origin_time, delta=0.01, weight=5));
+moves.append(mvSlide(origin_time, delta=0.10, weight=3));
+moves.append(mvSlide(origin_time, delta=1.00, weight=1));
+
+#fbd_dist = dnFBDRP(origin=origin_time, lambda=speciation_rate, mu=extinction_rate, psi=psi, rho=rho, taxa=taxa);
+
+
+# Define the tree-prior distribution as the birth-death process #
+tree_dist = dnFBDP(lambda=speciation_rate, psi = psi, mu=extinction_rate, rho=rho, rootAge=origin_time, condition="sampling", taxa=taxa)
+
+# create the vector of clade constraints
+
+outgroup = clade("Biarmosuchus_tener", "Hipposaurus_boonstrai");
+
+lystro = clade("Lystrosaurus_hedini", "Lystrosaurus_maccaigi", "Lystrosaurus_curvatus", "Lystrosaurus_declivis", "Lystrosaurus_murrayi")
+gelao = clade("Galeops_whaitsi", "Galepus_jouberti")
+constraints = v(outgroup, lystro, gelao);
+
+constraints = v(outgroup);
+timetree ~ dnConstrainedTopology(tree_dist, constraints=constraints)
+#timetree.setValue(mcc)
+timetree
+# Specify moves on the tree and node times #
+moves.append( mvNarrow(timetree, weight=num_taxa) )
+moves.append( mvFNPR(timetree, weight=num_taxa/4.0) )
+moves.append( mvNodeTimeSlideUniform(timetree, weight=num_taxa) )
+moves.append( mvSubtreeScale(timetree, weight=num_taxa/5.0) )
+
+fossils = timetree.getFossils()
+fossils
+for(i in 1:fossils.size())
+{
+    t[i] := tmrca(timetree, clade(fossils[i]))
+
+    a_i = fossils[i].getMinAge()
+    b_i = fossils[i].getMaxAge()
+
+    F[i] ~ dnUniform(t[i] - b_i, t[i] - a_i)
+    F[i].clamp( 0 )
+}
+# Add a move to sample the fossil times #
+moves.append(mvFossilTimeSlideUniform(timetree, origin_time, weight=5.0))
+moves.append(mvCollapseExpandFossilBranch(timetree, origin_time, weight=6.0))
+
+# Add tree moves
+moves.append(mvFNPR(timetree, weight=15))
+moves.append(mvNodeTimeSlideUniform(timetree, weight=40))
+moves.append(mvRootTimeSlideUniform(timetree, origin_time, weight=5))
+
+### Create deterministic nodes to monitor various tree statistics ###
+# Monitor the number of sampled ancestors in the FBD-tree #
+num_samp_anc := timetree.numSampledAncestors();
+

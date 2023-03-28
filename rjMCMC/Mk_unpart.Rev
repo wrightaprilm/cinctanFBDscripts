@@ -1,0 +1,16 @@
+n_max_states <- 5
+morpho_bystate[1] <- morpho
+if (model_indicator == 1){
+    for (i in 2:n_max_states) {
+        morpho_bystate[i] <- morpho
+        morpho_bystate[i].setNumStatesPartition(i)
+        nc = morpho_nf_bystate[i].nchar()
+    # for non-empty character blocks
+        if (nc > 0) {
+            morpho_bystate[i]
+            Q_one[idx] <- fnJC(i)
+
+            i <- i + 1
+            idx = idx + 1
+        }
+            }
