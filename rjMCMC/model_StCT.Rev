@@ -8,3 +8,5 @@ clock_cont := 10^log_sigma  # BM sigma
 moves.append( mvSlide(log_sigma, delta=0.5, weight=1, tune=false) )
 moves.append( mvSlide(log_sigma, delta=0.1, weight=2, tune=false) )
 moves.append( mvSlide(log_sigma, delta=.02, weight=1, tune=false) )
+
+strict_rates := rep(clock_cont, num_branches)
